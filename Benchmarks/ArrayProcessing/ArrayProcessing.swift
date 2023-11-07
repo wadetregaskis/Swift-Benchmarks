@@ -78,4 +78,19 @@ let benchmarks = {
                 .reduce(into: 0, &+=))
         }
     }
+
+    Benchmark("Filter, map, and reduce (lazily)") { benchmark in
+        for _ in benchmark.scaledIterations {
+            blackHole(testData.next
+                .lazy
+                .filter { 0 == $0 % 2 }
+                .map { $0.byteSwapped }
+                .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
+                .map { $0.leadingZeroBitCount }
+                .filter { Int.bitWidth - 8 >= $0 }
+                .reduce(into: 0) { (result, value) in
+                    result &+= value
+                })
+        }
+    }
 }
