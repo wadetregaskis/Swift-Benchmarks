@@ -39,7 +39,7 @@ struct Datas {
     }
 }
 
-var testData = Datas(size: 1 << 12)
+var testData = Datas(size: 1 << 28)
 
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(maxDuration: .seconds(60),
