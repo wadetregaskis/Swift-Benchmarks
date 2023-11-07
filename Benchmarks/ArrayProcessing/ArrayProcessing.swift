@@ -47,35 +47,35 @@ let benchmarks = {
 
     Benchmark("for-in loop") { benchmark in
         for _ in benchmark.scaledIterations {
-            var matchCount = 0
+            var result = 0
 
             for value in testData.next {
                 if 0 == value % 2 {
                     let value = value.byteSwapped
 
                     if (value & 0xff00) >> 8 < value & 0xff {
-                        let value = value.description
+                        let value = value.leadingZeroBitCount
 
-                        if value.count > 3 {
-                            matchCount &+= 1
+                        if Int.bitWidth - 8 >= value {
+                            result &+= value
                         }
                     }
                 }
             }
 
-            blackHole(matchCount)
+            blackHole(result)
         }
     }
 
-    Benchmark("Filter, map, and count") { benchmark in
+    Benchmark("Filter, map, and reduce") { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(testData.next
                 .filter { 0 == $0 % 2 }
                 .map { $0.byteSwapped }
                 .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
-                .map(\.description)
-                .filter { $0.count > 3 }
-                .count)
+                .map { $0.leadingZeroBitCount }
+                .filter { Int.bitWidth - 8 >= $0 }
+                .reduce(into: 0, &+=))
         }
     }
 }
