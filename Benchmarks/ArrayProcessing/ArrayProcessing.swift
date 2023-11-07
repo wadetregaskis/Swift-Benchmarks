@@ -41,36 +41,6 @@ struct Datas {
 
 var testData = Datas(size: 1 << 12)
 
-@inlinable
-@inline(__always)
-func filter1(_ value: Int) -> Bool {
-    0 == value % 2
-}
-
-@inlinable
-@inline(__always)
-func map1(_ value: Int) -> Int {
-    value.byteSwapped
-}
-
-@inlinable
-@inline(__always)
-func filter2(_ value: Int) -> Bool {
-    (value & 0xff00) >> 8 < value & 0xff
-}
-
-@inlinable
-@inline(__always)
-func map2(_ value: Int) -> String {
-    value.description
-}
-
-@inlinable
-@inline(__always)
-func filter3(_ value: String) -> Bool {
-    3 < value.count
-}
-
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(maxDuration: .seconds(60),
                                            maxIterations: 100)
@@ -80,13 +50,13 @@ let benchmarks = {
             var matchCount = 0
 
             for value in testData.next {
-                if filter1(value) {
-                    let value = map1(value)
+                if 0 == value % 2 {
+                    let value = value.byteSwapped
 
-                    if filter2(value) {
-                        let value = map2(value)
+                    if (value & 0xff00) >> 8 < value & 0xff {
+                        let value = value.description
 
-                        if filter3(value) {
+                        if value.count > 3 {
                             matchCount &+= 1
                         }
                     }
@@ -100,11 +70,11 @@ let benchmarks = {
     Benchmark("Filter, map, and count") { benchmark in
         for _ in benchmark.scaledIterations {
             blackHole(testData.next
-                .filter { filter1($0) }
-                .map { map1($0) }
-                .filter { filter2($0) }
-                .map { map2($0) }
-                .filter { filter3($0) }
+                .filter { 0 == $0 % 2 }
+                .map { $0.byteSwapped }
+                .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
+                .map(\.description)
+                .filter { $0.count > 3 }
                 .count)
         }
     }
