@@ -13,7 +13,7 @@ struct Datas {
                     var prng = Xoshiro(seed: UInt64(exactly: i)!)
 
                     for i in 0..<count {
-                        buffer[i] = Gen.int(in: Int.min...Int.max).run(using: &prng)
+                        buffer[i] = Int.random(in: Int.min...Int.max, using: &prng)
                     }
 
                     initialisedCount = count
