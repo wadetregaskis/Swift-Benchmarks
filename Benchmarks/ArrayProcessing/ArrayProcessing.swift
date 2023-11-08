@@ -61,7 +61,7 @@ let benchmarks = {
                 var result = 0
 
                 for value in testData.next {
-                    if 0 == value % 2 {
+                    if 0 != value {
                         let value = value.byteSwapped
 
                         if (value & 0xff00) >> 8 < value & 0xff {
@@ -81,7 +81,7 @@ let benchmarks = {
         Benchmark("[\(dataSizeLabel)] Filter, map, and reduce") { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(testData.next
-                    .filter { 0 == $0 % 2 }
+                    .filter { 0 != $0 }
                     .map { $0.byteSwapped }
                     .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
                     .map { $0.leadingZeroBitCount }
@@ -94,7 +94,7 @@ let benchmarks = {
             for _ in benchmark.scaledIterations {
                 blackHole(testData.next
                     .lazy
-                    .filter { 0 == $0 % 2 }
+                    .filter { 0 != $0 }
                     .map { $0.byteSwapped }
                     .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
                     .map { $0.leadingZeroBitCount }
