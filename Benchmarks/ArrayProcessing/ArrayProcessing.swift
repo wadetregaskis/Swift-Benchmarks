@@ -38,7 +38,14 @@ struct Datas {
 var testData = Datas(size: 1 << 28)
 
 let benchmarks = {
-    Benchmark.defaultConfiguration = .init(maxDuration: .seconds(60),
+    Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
+                                                     .wallClock,
+                                                     .peakMemoryResident,
+                                                     .mallocCountTotal,
+                                                     .allocatedResidentMemory,
+                                                     .retainCount,
+                                                     .releaseCount],
+                                           maxDuration: .seconds(30),
                                            maxIterations: 100)
 
     Benchmark("for-in loop") { benchmark in
