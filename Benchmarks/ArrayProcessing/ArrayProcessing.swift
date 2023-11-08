@@ -50,7 +50,7 @@ let benchmarks = {
         // Have to provide bespoke labels, rather than using e.g. (1 << dataSize).formatted(.byteCount(style: .binary)), because said formatter is broken (it uses decimal labels, e.g. "kB", rather than binary ones).
         (0, "Empty collection"),  // Empty array.  Looks at the baseline overhead.
         (15, "32 KiB"),           // Fits into L1 cache.
-        (19, "512 KiB"),          // Probably doesn't fit into L1, but should fit into L2.
+        (20, "1 MiB"),            // Probably doesn't fit into L1, but should fit into L2.
         (23, "8 MiB"),            // Probably doesn't fit into L2, but should fit into L3 (if present).
         (28, "256 MiB")           // Probably doesn't fit into any CPU caches.
     ] {
