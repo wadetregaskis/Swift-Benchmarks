@@ -2,33 +2,29 @@ import Benchmark
 import Gen
 
 struct Datas {
-    let size: Int
-
-    private lazy var datas: [[Int]] = {
-        return Array(unsafeUninitializedCapacity: 2) { buffer, initialisedCount in
-            let count = size / MemoryLayout<Int>.size
-
-            for i in 0..<2 {
-                buffer[i] = Array(unsafeUninitializedCapacity: count) { buffer, initialisedCount in
-                    var prng = Xoshiro(seed: UInt64(exactly: i)!)
-
-                    for i in 0..<count {
-                        buffer[i] = Int.random(in: Int.min...Int.max, using: &prng)
-                    }
-
-                    initialisedCount = count
-                }
-            }
-
-            initialisedCount = 2
-        }
-    }()
-
+    private let datas: [[Int]]
     private var currentDataIndex = -1
 
     init(size: Int) {
         precondition(0 < size, "'size' of the test Datas must be one or more.")
-        self.size = size
+
+        var datas = [[Int]]()
+
+        let count = size / MemoryLayout<Int>.size
+
+        for i in 0..<2 {
+            datas.append(Array(unsafeUninitializedCapacity: count) { buffer, initialisedCount in
+                var prng = Xoshiro(seed: UInt64(exactly: i)!)
+
+                for i in 0..<count {
+                    buffer[i] = Int.random(in: Int.min...Int.max, using: &prng)
+                }
+
+                initialisedCount = count
+            })
+        }
+
+        self.datas = datas
     }
 
     var next: [Int] {
