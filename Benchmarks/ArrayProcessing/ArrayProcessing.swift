@@ -38,9 +38,7 @@ struct Datas {
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
                                                      .wallClock,
-                                                     .peakMemoryResident,
                                                      .mallocCountTotal,
-                                                     .allocatedResidentMemory,
                                                      .retainCount,
                                                      .releaseCount],
                                            maxDuration: .seconds(30),
