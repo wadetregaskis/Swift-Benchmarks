@@ -11,6 +11,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/ordo-one/package-benchmark", .upToNextMajor(from: "1.11.2")),
         .package(url: "https://github.com/pointfreeco/swift-gen.git",  .upToNextMajor(from: "0.4.0")),
+        .package(url: "https://github.com/wadetregaskis/FoundationExtensions.git", .upToNextMajor(from: "3.4.0")),
     ],
     targets: [
         .executableTarget(
@@ -30,6 +31,18 @@ let package = Package(
                 .product(name: "Benchmark", package: "package-benchmark"),
             ],
             path: "Benchmarks/Clocks",
+            plugins: [
+                .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            ]
+        ),
+        .executableTarget(
+            name: "URLSession",
+            dependencies: [
+                .product(name: "Benchmark", package: "package-benchmark"),
+                .product(name: "Gen", package: "swift-gen"),
+                .product(name: "FoundationExtensions", package: "FoundationExtensions"),
+            ],
+            path: "Benchmarks/URLSession",
             plugins: [
                 .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
             ]
