@@ -1,4 +1,5 @@
 import Benchmark
+import Darwin
 import Foundation
 import Gen
 
@@ -103,6 +104,31 @@ let benchmarks = {
             let delta = now - lastUpdate
 
             if delta > updateRateInMilliseconds * 1_000_000 {
+                lastUpdate = now
+            }
+        }
+
+        blackHole(lastUpdate)
+    }
+
+    Benchmark("mach_absolute_time") { benchmark in
+        var timebaseInfo = mach_timebase_info()
+        precondition(0 == mach_timebase_info(&timebaseInfo))
+
+        let updateRate = UInt64(Double(updateRateInMilliseconds)
+                                * 1_000_000
+                                * Double(timebaseInfo.denom)
+                                / Double(timebaseInfo.numer))
+
+        //print("timebaseInfo = \(timebaseInfo.numer) / \(timebaseInfo.denom)\nupdateRate = \(updateRate)")
+
+        var lastUpdate = mach_absolute_time()
+
+        for _ in benchmark.scaledIterations {
+            let now = mach_absolute_time()
+            let delta = now - lastUpdate
+
+            if delta > updateRate {
                 lastUpdate = now
             }
         }
