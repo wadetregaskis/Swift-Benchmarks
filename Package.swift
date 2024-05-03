@@ -28,7 +28,6 @@ let package = Package(
             name: "Clocks",
             dependencies: [
                 .product(name: "Benchmark", package: "package-benchmark"),
-                .product(name: "Gen", package: "swift-gen"),
             ],
             path: "Benchmarks/Clocks",
             plugins: [

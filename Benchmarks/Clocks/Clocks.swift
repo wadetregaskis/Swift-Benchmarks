@@ -1,7 +1,6 @@
 import Benchmark
 import Darwin
 import Foundation
-import Gen
 
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
