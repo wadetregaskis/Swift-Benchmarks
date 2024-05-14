@@ -58,7 +58,14 @@ let benchmarks = {
         var current = [1, 1, 1, 1]
 
         for _ in benchmark.scaledIterations {
-            let next = zip(previous, current).map { $0 &+ $1 }
+            let next = [previous[0] &+ current[0],
+                        previous[1] &+ current[1],
+                        previous[2] &+ current[2],
+                        previous[3] &+ current[3]]
+            // Logically the same as:
+            //   zip(previous, current).map { $0 &+ $1 }
+            // …but the compiler doesn't optimise that nearly as well; it's about three times slower than manually unrolling.
+
             previous = current
             current = next
         }
