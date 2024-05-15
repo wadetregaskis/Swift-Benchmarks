@@ -40,6 +40,18 @@ let benchmarks = {
         blackHole(current)
     }
 
+    Benchmark("Fibonnaci Integer (using tuple swap)") { benchmark in
+        var previous = 0
+        var current = 1
+
+        for _ in benchmark.scaledIterations {
+            previous &+= current
+            (previous, current) = (current, previous)
+        }
+
+        blackHole(current)
+    }
+
     Benchmark("Fibonnaci Integer (using reduce(_:_:))") { benchmark in
         blackHole(benchmark.scaledIterations.reduce((0, 1)) { pair, _ in
             (pair.1, pair.1 &+ pair.0)
@@ -83,6 +95,21 @@ let benchmarks = {
             }
 
             swap(&previous, &current)
+        }
+
+        blackHole(current)
+    }
+
+    Benchmark("Fibonnaci Array (using tuple swap)") { benchmark in
+        var previous = [0, 0, 0, 0]
+        var current = [1, 1, 1, 1]
+
+        for _ in benchmark.scaledIterations {
+            for i in previous.indices {
+                previous[i] &+= current[i]
+            }
+
+            (previous, current) = (current, previous)
         }
 
         blackHole(current)
@@ -143,6 +170,18 @@ let benchmarks = {
         blackHole(current)
     }
 
+    Benchmark("Fibonnaci UIntXL (using tuple swap)") { benchmark in
+        var previous = UIntXL(0)
+        var current = UIntXL(1)
+
+        for _ in 0 ..< (benchmark.scaledIterations.upperBound / 10) {
+            previous += current
+            (previous, current) = (current, previous)
+        }
+
+        blackHole(current)
+    }
+
     Benchmark("Fibonnaci UIntXL (using reduce(_:_:))") { benchmark in
         blackHole((0 ..< (benchmark.scaledIterations.upperBound / 10)).reduce((UIntXL(0), UIntXL(1))) { pair, _ in
             (pair.1, pair.1 + pair.0)
@@ -176,6 +215,18 @@ let benchmarks = {
         for _ in 0 ..< (benchmark.scaledIterations.upperBound / 10) {
             previous += current
             swap(&previous, &current)
+        }
+
+        blackHole(current)
+    }
+
+    Benchmark("Fibonnaci BigUInt (using tuple swap)") { benchmark in
+        var previous = BigUInt(0)
+        var current = BigUInt(1)
+
+        for _ in 0 ..< (benchmark.scaledIterations.upperBound / 10) {
+            previous += current
+            (previous, current) = (current, previous)
         }
 
         blackHole(current)
