@@ -12,9 +12,6 @@ let benchmarks = {
                                            maxDuration: .seconds(30),
                                            maxIterations: 100)
 
-    let cycles = 1_000_000
-    let updateRateInMilliseconds = 100
-
     Benchmark("Fibonnaci Integer (using temporary)") { benchmark in
         var previous = 0
         var current = 1
