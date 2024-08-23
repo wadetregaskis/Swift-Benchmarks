@@ -102,5 +102,25 @@ let benchmarks = {
                     })
             }
         }
+
+        @inline(never)
+        func process(_ array: some Sequence<Int> & LazySequenceProtocol) -> some Sequence<Int> & LazySequenceProtocol {
+            array.lazy
+                .filter { 0 != $0 }
+                .map { $0.byteSwapped }
+                .filter { ($0 & 0xff00) >> 8 < $0 & 0xff }
+                .map { $0.leadingZeroBitCount }
+                .filter { Int.bitWidth - 8 >= $0 }
+        }
+
+        Benchmark("[\(dataSizeLabel)] Filter, map, and reduce (lazily inside function)") { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(
+                    process(testData.next.lazy)
+                        .reduce(into: 0) { (result, value) in
+                            result &+= value
+                        })
+            }
+        }
     }
 }
