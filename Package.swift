@@ -38,6 +38,17 @@ let package = Package(
             ]
         ),
         .executableTarget(
+            name: "StringReplacement",
+            dependencies: [
+                .product(name: "Benchmark", package: "package-benchmark"),
+                .product(name: "Gen", package: "swift-gen"),
+            ],
+            path: "Benchmarks/StringReplacement",
+            plugins: [
+                .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
+            ]
+        ),
+        .executableTarget(
             name: "Swap",
             dependencies: [
                 .product(name: "Benchmark", package: "package-benchmark"),
