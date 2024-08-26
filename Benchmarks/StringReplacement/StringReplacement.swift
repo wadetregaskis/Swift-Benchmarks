@@ -35,12 +35,12 @@ let benchmarks = {
     for (sampleCore, label) in [
         ("", "Empty string"),
         (replacements.map { $0.0 }.joined(), "Only matches"),
-        (stringWithNoMatches, "String with no matches"),
-        (stringWithNoMatchesASCII, "String with no matches (ASCII)"),
-        (stringWithOneMatch, "String with one match"),
-        (stringWithOneMatchASCII, "String with one match (ASCII)"),
-        (stringWithManyMatches, "String with many matches"),
-        (stringWithManyMatchesASCII, "String with many matches (ASCII)")
+        (stringWithNoMatches, "No matches"),
+        (stringWithNoMatchesASCII, "No matches (ASCII)"),
+        (stringWithOneMatch, "Few matches"),
+        (stringWithOneMatchASCII, "Few matches (ASCII)"),
+        (stringWithManyMatches, "Many matches"),
+        (stringWithManyMatchesASCII, "Many matches (ASCII)")
     ] {
         for lengthModifier in sampleCore.isEmpty ? [1] : [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000] {
             let sample = String(String(repeating: sampleCore, count: lengthModifier))
