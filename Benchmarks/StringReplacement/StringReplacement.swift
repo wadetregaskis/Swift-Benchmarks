@@ -267,7 +267,7 @@ let benchmarks = {
                 }
             }
 
-            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via first(where:) & concatenation") { benchmark in
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via firstIndex(where:) & concatenation") { benchmark in
                 for _ in benchmark.scaledIterations {
                     var result = ""
 
@@ -302,7 +302,7 @@ let benchmarks = {
                 }
             }
 
-            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via first(where:) & concatenation (array of replacements instead of dictionary)") { benchmark in
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via firstIndex(where:) & concatenation (array of replacements instead of dictionary)") { benchmark in
                 for _ in benchmark.scaledIterations {
                     var result = ""
 
@@ -339,7 +339,7 @@ let benchmarks = {
                 }
             }
 
-            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via first(where:) & concatenation, with naive space reservation") { benchmark in
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via firstIndex(where:) & concatenation, with naive space reservation") { benchmark in
                 for _ in benchmark.scaledIterations {
                     var result = ""
 
@@ -376,7 +376,7 @@ let benchmarks = {
                 }
             }
 
-            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via first(where:) & concatenation, with naive space reservation (array of replacements instead of dictionary)") { benchmark in
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via firstIndex(where:) & concatenation, with naive space reservation (array of replacements instead of dictionary)") { benchmark in
                 for _ in benchmark.scaledIterations {
                     var result = ""
 
