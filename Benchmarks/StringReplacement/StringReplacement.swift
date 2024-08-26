@@ -423,9 +423,31 @@ let benchmarks = {
                 }
             }
 
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via lazy map & join") { benchmark in
+                for _ in benchmark.scaledIterations {
+                    checkResult(String(sample.lazy.map {
+                        replacementsAsDictionary[$0] ?? $0
+                    }))
+                }
+            }
+
             Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via map & join (array of replacements instead of dictionary)") { benchmark in
                 for _ in benchmark.scaledIterations {
                     checkResult(String(sample.map {
+                        for replacement in replacementsAsCharacters {
+                            if replacement.0 == $0 {
+                                return replacement.1
+                            }
+                        }
+
+                        return $0
+                    }))
+                }
+            }
+
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] Single pass via lazy map & join (array of replacements instead of dictionary)") { benchmark in
+                for _ in benchmark.scaledIterations {
+                    checkResult(String(sample.lazy.map {
                         for replacement in replacementsAsCharacters {
                             if replacement.0 == $0 {
                                 return replacement.1
