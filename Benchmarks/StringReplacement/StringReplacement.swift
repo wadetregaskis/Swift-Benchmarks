@@ -103,7 +103,7 @@ let benchmarks = {
             //                }
             //            }
 
-            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] N-pass via replacingOccurences(.literal)") { benchmark in
+            Benchmark("[\(label) ⨉\(lengthModifier.formatted())] N-pass via replacingOccurrences(.literal)") { benchmark in
                 for _ in benchmark.scaledIterations {
                     var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1, options: .literal)
 
