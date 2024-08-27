@@ -5,8 +5,8 @@ import Gen
 let stringWithNoMatches = "Remember, if anything happens to me, or you don't hear from me within the hour… you take this ship and you come and you rescue me."
 let stringWithNoMatchesASCII = "Remember, if anything happens to me, or you don't hear from me within the hour... you take this ship and you come and you rescue me."
 
-let stringWithOneMatch = "You cannot make me 😠. / Please, spend an hour with him!"
-let stringWithOneMatchASCII = "You cannot make me angry. / Please, spend an hour with him!"
+let stringWithOneMatch = "You cannot make me 😠. \0 Please, spend an hour with him!"
+let stringWithOneMatchASCII = "You cannot make me angry. \0 Please, spend an hour with him!"
 
 let stringWithManyMatches = "My / 🚀 / don't / 💥. If : she : crashes, : you / crashed / her."
 let stringWithManyMatchesASCII = "My / ship / don't / crash. If : she : crashes, : you / crashed / her."
