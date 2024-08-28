@@ -14,8 +14,7 @@ let stringWithManyMatchesASCII = "[Mal]\0-\0Remember:/if/anything:happens/to:me,
 let validateResults = false // Off by default because it impacts performance.  Ignore the output measurements when this is enabled.
 
 let benchmarks = {
-    Benchmark.defaultConfiguration = .init(metrics: validateResults ? [] : [.cpuTotal,
-                                                                            .wallClock,
+    Benchmark.defaultConfiguration = .init(metrics: validateResults ? [] : [.wallClock,
                                                                             .mallocCountTotal,
                                                                             .peakMemoryResident,
                                                                             .objectAllocCount,
