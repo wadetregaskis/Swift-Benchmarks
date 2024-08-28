@@ -2,14 +2,14 @@ import Benchmark
 import Foundation
 import Gen
 
-let stringWithNoMatches = "Remember, if anything happens to me, or you don't hear from me within the hour… you take this ship and you come and you rescue me."
-let stringWithNoMatchesASCII = "Remember, if anything happens to me, or you don't hear from me within the hour... you take this ship and you come and you rescue me."
+let stringWithNoMatches = "[Mal] - Remember, if anything happens to me, or you don't 👂 from me within the hour… you take this 🚀 and you come and you rescue me."
+let stringWithNoMatchesASCII = "[Mal] - Remember, if anything happens to me, or you don't hear from me within the hour... you take this ship and you come and you rescue me."
 
-let stringWithOneMatch = "You cannot make me 😠. \0 Please, spend an hour with him!"
-let stringWithOneMatchASCII = "You cannot make me angry. \0 Please, spend an hour with him!"
+let stringWithFewMatches = "[Mal] - Remember, if anything happens to me, or you don't 👂 from me within the hour…\0you take this 🚀 and you come and you rescue me."
+let stringWithFewMatchesASCII = "[Mal] - Remember, if anything happens to me, or you don't hear from me within the hour...\0you take this ship and you come and you rescue me."
 
-let stringWithManyMatches = "My / 🚀 / don't / 💥. If : she : crashes, : you / crashed / her."
-let stringWithManyMatchesASCII = "My / ship / don't / crash. If : she : crashes, : you / crashed / her."
+let stringWithManyMatches = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:you/don't:👂:from/me:within/the:hour…\0you:take/this:🚀:and/you:come/and:you/rescue:me."
+let stringWithManyMatchesASCII = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:you/don't:hear:from/me:within/the:hour...\0you:take/this:ship:and/you:come/and:you/rescue:me."
 
 let validateResults = false // Off by default because it impacts performance.  Ignore the output measurements when this is enabled.
 
