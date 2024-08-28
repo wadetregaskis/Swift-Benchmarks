@@ -12,7 +12,7 @@ let stringWithManyMatches = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:
 let stringWithManyMatchesASCII = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:you/don't:hear:from/me:within/the:hour...\0you:take/this:ship:and/you:come/and:you/rescue:me."
 
 let validateResults = false // Off by default because it impacts performance.  Ignore the output measurements when this is enabled.
-let printInputs = true // On by default so that there's a record, in the output along with the benchmark results, of what the exact sample strings were.
+let printInputs = false // Off by default because also it's nice to have it in the output as a record of what exactly was tested, I can't figure out how to have it output only once, rather than a bajillion times. 😕
 
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(metrics: validateResults ? [] : [.wallClock,
