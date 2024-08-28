@@ -101,7 +101,25 @@ let benchmarks = {
                     }
                 }
 
-                let params = "[\(label), \(sample.count.formatted()) / \(sample.utf8.count.formatted()), \(replacementsLabel)]"
+                let params: String
+
+                if sampleCore.isEmpty {
+                    params = "[\(label)]"
+                } else {
+                    let sampleCharacterCount = if 0 < lengthModifier {
+                        sampleCore.count * lengthModifier
+                    } else {
+                        tinySample.count
+                    }
+
+                    let sampleByteCount = if 0 < lengthModifier {
+                        sampleCore.utf8.count * lengthModifier
+                    } else {
+                        tinySample.utf8.count
+                    }
+
+                    params = "[\(label), \(sampleCharacterCount.formatted()) / \(sampleByteCount.formatted()), \(replacementsLabel)]"
+                }
 
                 Benchmark("\(params) N-pass via replacingOccurrences") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
