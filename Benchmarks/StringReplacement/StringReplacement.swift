@@ -97,7 +97,9 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] N-pass via replacingOccurrences") { benchmark in
+                let params = "[\(label), \(sample.count.formatted()) / \(sample.utf8.count.formatted()), \(replacementsLabel)]"
+
+                Benchmark("\(params) N-pass via replacingOccurrences") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1)
 
@@ -122,7 +124,7 @@ let benchmarks = {
                 //                }
                 //            }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] N-pass via replacingOccurrences(.literal)") { benchmark in
+                Benchmark("\(params) N-pass via replacingOccurrences(.literal)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1, options: .literal)
 
@@ -134,7 +136,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] N-pass via replace") { benchmark in
+                Benchmark("\(params) N-pass via replace") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = sample
 
@@ -146,7 +148,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] N-pass via replacing") { benchmark in
+                Benchmark("\(params) N-pass via replacing") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacing(replacements[0].0, with: replacements[0].1)
 
@@ -158,7 +160,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via character enumeration & concatenation") { benchmark in
+                Benchmark("\(params) Single pass via character enumeration & concatenation") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -177,7 +179,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via character enumeration & concatenation, with naive space reservation") { benchmark in
+                Benchmark("\(params) Single pass via character enumeration & concatenation, with naive space reservation") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -198,7 +200,40 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Two pass via character enumeration & concatenation, with accurate space reservation") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation (Dictionary of replacements instead of Array)") { benchmark in
+                    for _ in benchmark.scaledIterations {
+                        var outputByteCount = 0
+                        var willReplace = false
+
+                        for character in sample {
+                            if let replacement = replacementsAsDictionary[character] {
+                                outputByteCount += replacement.utf8.count
+                                willReplace = true
+                            } else {
+                                outputByteCount += character.utf8.count
+                            }
+                        }
+
+                        //print("\"\(sample)\" is \(sample.utf8.count) and will need \(outputByteCount).") // e.g.: ":/." is 3 and will need 5.
+
+                        guard willReplace else {
+                            blackHole(sample)
+                            continue
+                        }
+
+                        var result = ""
+
+                        result.reserveCapacity(outputByteCount)
+
+                        for character in sample {
+                            result.append(replacementsAsDictionary[character] ?? character)
+                        }
+
+                        checkResult(result)
+                    }
+                }
+
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -241,7 +276,49 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:) (Dictionary of replacements instead of Array)") { benchmark in
+                    for _ in benchmark.scaledIterations {
+                        var outputByteCount = 0
+                        var willReplace = false
+
+                        for character in sample {
+                            if let replacement = replacementsAsDictionary[character] {
+                                outputByteCount += replacement.utf8.count
+                                willReplace = true
+                            } else {
+                                outputByteCount += character.utf8.count
+                            }
+                        }
+
+                        //print("\"\(sample)\" is \(sample.utf8.count) and will need \(outputByteCount).") // e.g.: ":/." is 3 and will need 5.
+
+                        guard willReplace else {
+                            blackHole(sample)
+                            continue
+                        }
+
+                        let result = String(unsafeUninitializedCapacity: outputByteCount, initializingUTF8With: { buffer in
+                            var index = buffer.startIndex
+
+                            mainLoop: for character in sample {
+                                for replacement in replacementsAsCharacters {
+                                    if character == replacement.0 {
+                                        index = buffer[index...].initialize(fromContentsOf: replacement.1.utf8)
+                                        continue mainLoop
+                                    }
+                                }
+
+                                index = buffer[index...].initialize(fromContentsOf: character.utf8)
+                            }
+
+                            return buffer.distance(from: buffer.startIndex, to: index)
+                        })
+
+                        checkResult(result)
+                    }
+                }
+
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -286,7 +363,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via firstIndex(where:) & concatenation") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation (Dictionary of replacements instead of Array)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -321,7 +398,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via firstIndex(where:) & concatenation (array of replacements instead of dictionary)") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -358,7 +435,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via firstIndex(where:) & concatenation, with naive space reservation") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation (Dictionary of replacements instead of Array)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -395,7 +472,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via firstIndex(where:) & concatenation, with naive space reservation (array of replacements instead of dictionary)") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation") { benchmark in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -434,7 +511,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via map & join") { benchmark in
+                Benchmark("\(params) Single pass via map & join (Dictionary of replacements instead of Array)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.map {
                             replacementsAsDictionary[$0] ?? $0
@@ -442,7 +519,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via lazy map & join") { benchmark in
+                Benchmark("\(params) Single pass via lazy map & join (Dictionary of replacements instead of Array)") { benchmark in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.lazy.map {
                             replacementsAsDictionary[$0] ?? $0
@@ -450,7 +527,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via map & join (array of replacements instead of dictionary)") { benchmark in
+                Benchmark("\(params) Single pass via map & join") { benchmark in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.map {
                             for replacement in replacementsAsCharacters {
@@ -464,7 +541,7 @@ let benchmarks = {
                     }
                 }
 
-                Benchmark("[\(label) ⨉\(lengthModifier.formatted()), \(replacementsLabel)] Single pass via lazy map & join (array of replacements instead of dictionary)") { benchmark in
+                Benchmark("\(params) Single pass via lazy map & join") { benchmark in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.lazy.map {
                             for replacement in replacementsAsCharacters {
