@@ -12,6 +12,7 @@ let stringWithManyMatches = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:
 let stringWithManyMatchesASCII = "[Mal]\0-\0Remember:/if/anything:happens/to:me,\0or:you/don't:hear:from/me:within/the:hour...\0you:take/this:ship:and/you:come/and:you/rescue:me."
 
 let validateResults = false // Off by default because it impacts performance.  Ignore the output measurements when this is enabled.
+let printInputs = true // On by default so that there's a record, in the output along with the benchmark results, of what the exact sample strings were.
 
 let benchmarks = {
     Benchmark.defaultConfiguration = .init(metrics: validateResults ? [] : [.wallClock,
@@ -31,22 +32,37 @@ let benchmarks = {
                                                                                           ("/", ":"),
                                                                                           ("\0", "␀")])]
 
-    for (replacementsLabel, replacementsAsCharacters) in replacementClasses {
-        let replacements = replacementsAsCharacters.map { (String($0.0), String($0.1)) }
-        let replacementsAsDictionary = Dictionary(uniqueKeysWithValues: replacementsAsCharacters)
+    for (sampleCore, tinySample, label) in [
+        ("", "", "Empty string"),
+        (String(repeating: "/::\0", count: stringWithNoMatches.utf8.count / 4), "\0/:\0/:\0/:\0/:\0/", "Only matches"),
+        (stringWithNoMatches, "…rescue me!!", "No matches"),
+        (stringWithNoMatchesASCII, "...rescue me!!", "No matches (ASCII)"),
+        (stringWithFewMatches, "…rescue me!\0", "Few matches"),
+        (stringWithFewMatchesASCII, "...rescue me!\0", "Few matches (ASCII)"),
+        (stringWithManyMatches, ":/\0rescue:me/\0", "Many matches"),
+        (stringWithManyMatchesASCII, ":/\0rescue:me/\0", "Many matches (ASCII)")
+    ] {
+        if printInputs {
+            print("""
+                  Sample "\(label)": \(sampleCore) [\(sampleCore.count) characters, \(sampleCore.utf8.count) bytes]
+                     ↳ Tiny version: \(tinySample) [\(tinySample.count) characters, \(tinySample.utf8.count) bytes]
+                  """)
+        }
 
-        for (sampleCore, label) in [
-            ("", "Empty string"),
-            (replacements.map { $0.0 }.joined(), "Only matches"),
-            (stringWithNoMatches, "No matches"),
-            (stringWithNoMatchesASCII, "No matches (ASCII)"),
-            (stringWithOneMatch, "Few matches"),
-            (stringWithOneMatchASCII, "Few matches (ASCII)"),
-            (stringWithManyMatches, "Many matches"),
-            (stringWithManyMatchesASCII, "Many matches (ASCII)")
-        ] {
-            for lengthModifier in sampleCore.isEmpty ? [1] : [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000] {
-                let sample = String(String(repeating: sampleCore, count: lengthModifier))
+        for (replacementsLabel, replacementsAsCharacters) in replacementClasses {
+            let replacements = replacementsAsCharacters.map { (String($0.0), String($0.1)) }
+            let replacementsAsDictionary = Dictionary(uniqueKeysWithValues: replacementsAsCharacters)
+
+            for lengthModifier in (sampleCore.isEmpty
+                                   ? [1]
+                                   : (validateResults
+                                      ? [0, 1, 10]
+                                      : [0, 1, 10, 100, 1_000, 10_000, 100_000, 1_000_000])) {
+                let sample = if 0 < lengthModifier {
+                    String(String(repeating: sampleCore, count: lengthModifier))
+                } else {
+                    tinySample
+                }
 
                 let expectedResult = validateResults
                 ? { // Note that this expectation hard-codes the assumption that the replacements are commutative (they can be run in any order with identical results).
