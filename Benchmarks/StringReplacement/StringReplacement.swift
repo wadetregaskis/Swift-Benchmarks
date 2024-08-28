@@ -61,7 +61,7 @@ let benchmarks = {
                 : ""
 
                 if validateResults {
-                    print("Expected transformation: \(sample) → \(expectedResult)")
+                    print("Expected transformation: \(sample) → \(expectedResult)") // For manual verification by a human.  Last-ditch defence.
                 }
 
                 @inline(__always)
