@@ -49,7 +49,7 @@ let benchmarks = {
                   """)
         }
 
-        for (replacementsLabel, replacementsAsCharacters) in replacementClasses {
+        for (replacementsIndex, (replacementsLabel, replacementsAsCharacters)) in replacementClasses.enumerated() {
             let replacements = replacementsAsCharacters.map { (String($0.0), String($0.1)) }
             let replacementsAsDictionary = Dictionary(uniqueKeysWithValues: replacementsAsCharacters)
 
@@ -58,26 +58,30 @@ let benchmarks = {
                                    : (validateResults
                                       ? [0, 1, 10]
                                       : [0, 1, 10, 100, 1_000, 10_000, 100_000, 1_000_000])) {
-                let sample = if 0 < lengthModifier {
-                    String(String(repeating: sampleCore, count: lengthModifier))
-                } else {
-                    tinySample
+                if sampleCore.isEmpty && 0 != replacementsIndex {
+                    continue
                 }
 
-                let expectedResult = validateResults
-                ? { // Note that this expectation hard-codes the assumption that the replacements are commutative (they can be run in any order with identical results).
-                    var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1)
+                var expectedResult = ""
 
-                    for replacement in replacements[1...] {
-                        result = result.replacingOccurrences(of: replacement.0, with: replacement.1)
+                func createSampleAndExpectedResult() -> String {
+                    let sample = if 0 < lengthModifier {
+                        String(String(repeating: sampleCore, count: lengthModifier))
+                    } else {
+                        tinySample
                     }
 
-                    return result
-                }()
-                : ""
+                    if validateResults {
+                        expectedResult = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1)
 
-                if validateResults {
-                    print("Expected transformation: \(sample) → \(expectedResult)") // For manual verification by a human.  Last-ditch defence.
+                        for replacement in replacements[1...] {
+                            expectedResult = expectedResult.replacingOccurrences(of: replacement.0, with: replacement.1)
+                        }
+
+                        print("Expected transformation: \(sample) → \(expectedResult)") // For manual verification by a human.  Last-ditch defence.
+                    }
+
+                    return sample
                 }
 
                 @inline(__always)
@@ -99,7 +103,7 @@ let benchmarks = {
 
                 let params = "[\(label), \(sample.count.formatted()) / \(sample.utf8.count.formatted()), \(replacementsLabel)]"
 
-                Benchmark("\(params) N-pass via replacingOccurrences") { benchmark in
+                Benchmark("\(params) N-pass via replacingOccurrences") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1)
 
@@ -109,6 +113,8 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
                 // Doesn't make a meaningful difference in runtime.  In this non-unrolled version there is in principle additional overhead, in the form of additional ARC traffic for the String CoW (Copy-on-Write) mechanism as well as the actual copy on first write.  But it appears that overhead is insignificant in practice, here.  So no point enabling both forms (especially not for every benchmark case).  I'm choosing to favour the hypothetically more optimal form (above) in order to rule out the CoW variable (and because in at least some real-world cases the replacements will be hard-coded and so amenable to partial if not full manual unrolling, and even in dynamic cases if the author cares enough about performance to consult benchmarks like this, they're going to be amenable to partial unrolling).
@@ -124,7 +130,7 @@ let benchmarks = {
                 //                }
                 //            }
 
-                Benchmark("\(params) N-pass via replacingOccurrences(.literal)") { benchmark in
+                Benchmark("\(params) N-pass via replacingOccurrences(.literal)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacingOccurrences(of: replacements[0].0, with: replacements[0].1, options: .literal)
 
@@ -134,9 +140,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) N-pass via replace") { benchmark in
+                Benchmark("\(params) N-pass via replace") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = sample
 
@@ -146,9 +154,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) N-pass via replacing") { benchmark in
+                Benchmark("\(params) N-pass via replacing") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = sample.replacing(replacements[0].0, with: replacements[0].1)
 
@@ -158,9 +168,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via character enumeration & concatenation") { benchmark in
+                Benchmark("\(params) Single pass via character enumeration & concatenation") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -177,9 +189,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via character enumeration & concatenation, with naive space reservation") { benchmark in
+                Benchmark("\(params) Single pass via character enumeration & concatenation, with naive space reservation") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -198,9 +212,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -231,9 +247,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -274,9 +292,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:) (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:) (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -316,9 +336,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -361,9 +383,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -396,9 +420,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -433,9 +459,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -470,9 +498,11 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation") { benchmark in
+                Benchmark("\(params) Single pass via firstIndex(where:) & concatenation, with naive space reservation") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var result = ""
 
@@ -509,25 +539,31 @@ let benchmarks = {
 
                         checkResult(result)
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via map & join (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Single pass via map & join (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.map {
                             replacementsAsDictionary[$0] ?? $0
                         }))
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via lazy map & join (Dictionary of replacements instead of Array)") { benchmark in
+                Benchmark("\(params) Single pass via lazy map & join (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.lazy.map {
                             replacementsAsDictionary[$0] ?? $0
                         }))
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via map & join") { benchmark in
+                Benchmark("\(params) Single pass via map & join") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.map {
                             for replacement in replacementsAsCharacters {
@@ -539,9 +575,11 @@ let benchmarks = {
                             return $0
                         }))
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Single pass via lazy map & join") { benchmark in
+                Benchmark("\(params) Single pass via lazy map & join") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         checkResult(String(sample.lazy.map {
                             for replacement in replacementsAsCharacters {
@@ -553,6 +591,8 @@ let benchmarks = {
                             return $0
                         }))
                     }
+                } setup: {
+                    createSampleAndExpectedResult()
                 }
             }
         }
