@@ -22,7 +22,7 @@ let benchmarks = {
                                                                             .retainCount,
                                                                             .releaseCount],
                                            scalingFactor: validateResults ? .one : Benchmark.defaultConfiguration.scalingFactor,
-                                           maxDuration: .seconds(30),
+                                           maxDuration: .seconds(60),
                                            maxIterations: 100)
 
     let replacementClasses: [(String, [(Character, Character)])] = [("Length unchanged", [(":", "-"),
