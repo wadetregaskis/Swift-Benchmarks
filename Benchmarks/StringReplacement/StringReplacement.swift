@@ -314,7 +314,7 @@ let benchmarks = {
                     createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:) (Dictionary of replacements instead of Array)") { benchmark, sample in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation + String(unsafeUninitializedCapacity:initializingUTF8With:) (Dictionary of replacements instead of Array)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
@@ -358,7 +358,7 @@ let benchmarks = {
                     createSampleAndExpectedResult()
                 }
 
-                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation & String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark, sample in
+                Benchmark("\(params) Two pass via character enumeration & concatenation, with accurate space reservation + String(unsafeUninitializedCapacity:initializingUTF8With:)") { benchmark, sample in
                     for _ in benchmark.scaledIterations {
                         var outputByteCount = 0
                         var willReplace = false
