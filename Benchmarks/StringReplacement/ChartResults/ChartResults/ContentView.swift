@@ -155,7 +155,7 @@ struct ContentView: View {
                         VStack() {
                             let algorithms = Set(selectedData.map(\.algorithm)).sorted()
 
-//                            ForEach(algorithms, id: \String.self) {
+//                            ForEach(algorithms, id: \String.self) { // The compiler just hangs if ForEach is used inside the chartLegend contents, irrespective of what collection or ID keypath is used. 😤
 //                                HStack {
 //                                    $0.symbol
 //                                        .frame(width: 10, height: 10)
