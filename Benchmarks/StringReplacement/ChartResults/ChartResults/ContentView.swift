@@ -21,6 +21,7 @@ struct Record: Identifiable {
 }
 
 let emptyStringInput = "Empty string"
+let lineWidth: CGFloat = 3
 
 struct ContentView: View {
     @State var data: [Record] = []
@@ -36,7 +37,7 @@ struct ContentView: View {
                                                                         (/firstIndex\(where:\)/, .triangle),
                                                                         (/map & join/, .asterisk)]
 
-    let algorithmKeyphraseToStrokeStyle: [(Regex, StrokeStyle)] = [(/Dictionary of replacements instead of Array/, .init(lineWidth: 2, dash: [2, 2]))]
+    let algorithmKeyphraseToStrokeStyle: [(Regex, StrokeStyle)] = [(/\ \(Dictionary of replacements instead of Array\)/, .init(lineWidth: lineWidth, dash: [3.2, 3.2]))]
 
     let colourPalette: [Color] = [(221, 221, 221),
                                   (46, 37, 133),
@@ -78,10 +79,20 @@ struct ContentView: View {
 
                     data = newData
 
-                    for (i, algorithm) in Set(data.lazy.map(\.algorithm)).sorted().enumerated() {
-                        algorithmColour[algorithm] = colourPalette[i % colourPalette.count]
+                    var colourIndex = 0
+
+                    for algorithm in Set(data.lazy.map(\.algorithm)).sorted() {
                         algorithmSymbol[algorithm] = algorithmKeyphraseToSymbol.first { algorithm.contains($0.0) }?.1
-                        algorithmStrokeStyle[algorithm] = algorithmKeyphraseToStrokeStyle.first { algorithm.contains($0.0) }?.1
+
+                        let strokeStyleMatch = algorithmKeyphraseToStrokeStyle.first { algorithm.contains($0.0) }
+                        algorithmStrokeStyle[algorithm] = strokeStyleMatch?.1
+
+                        if let strokeStyleMatch, let baseColour = algorithmColour[algorithm.replacing(strokeStyleMatch.0, with: "")] {
+                            algorithmColour[algorithm] = baseColour
+                        } else {
+                            algorithmColour[algorithm] = colourPalette[colourIndex % colourPalette.count]
+                            colourIndex += 1
+                        }
                     }
 
                     selectedInput = data.first?.input
@@ -131,7 +142,7 @@ struct ContentView: View {
                         }
                     }.padding()
                 } else {
-                    let selectedData = data.lazy.filter { $0.input == selectedInput && $0.replacementEffect == selectedReplacementEffect && algorithmEnabled[$0.algorithm] ?? true }.sorted { $0.inputLengthInBytes < $1.inputLengthInBytes }
+                    let selectedData = data.lazy.filter { $0.input == selectedInput && $0.replacementEffect == selectedReplacementEffect && algorithmEnabled[$0.algorithm] ?? true }.sorted { $0.algorithm < $1.algorithm || ($0.algorithm == $1.algorithm && $0.inputLengthInBytes < $1.inputLengthInBytes) }
                     let xDomain = Set(selectedData.lazy.map(\.inputLengthInBytes)).sorted()
                     let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input }.map(\.duration)
                     let yRange = __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up))
@@ -175,9 +186,8 @@ struct ContentView: View {
 //                            min(4, lineWidth)
 //                        }
                         .chartLineStyleScale {
-                            algorithmStrokeStyle[$0] ?? .init(lineWidth: 2)
+                            algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
                         }
-//                        .chartSymbolSizeScale(mapping: { _ in 10 })
                         .chartYScale(domain: yRange, type: .log)
                         .chartYAxis {
                             AxisMarks {
