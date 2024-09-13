@@ -20,8 +20,40 @@ struct Record: Identifiable {
     let duration: Int
 }
 
+struct FuckYouSwift: Hashable, Identifiable {
+    let input: String
+    let algorithm: String
+    let averageDurationPerByte: Double
+
+    init(input: String, algorithm: String, averageDurationPerByte: Double = .nan) {
+        self.input = input
+        self.algorithm = algorithm
+        self.averageDurationPerByte = averageDurationPerByte
+    }
+
+    func hash(into hasher: inout Hasher) {
+        input.hash(into: &hasher)
+        algorithm.hash(into: &hasher)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.input == rhs.input && lhs.algorithm == rhs.algorithm
+    }
+
+    var id: String { input + "\0" + algorithm }
+}
+
 let emptyStringInput = "Empty string"
 let lineWidth: CGFloat = 3
+let comparisonAcrossInputsInput = "Comparison across inputs"
+
+let inputOrder = [
+    "Empty ",
+    "No ",
+    "Few ",
+    "Many ",
+    "Only "
+]
 
 struct ContentView: View {
     @State var data: [Record] = []
@@ -57,7 +89,45 @@ struct ContentView: View {
 
     var body: some View {
         VStack {
-            let preSelectedData = data.lazy.filter { $0.input == selectedInput && $0.replacementEffect == selectedReplacementEffect && algorithmEnabled[$0.algorithm] ?? true }.sorted { $0.algorithm < $1.algorithm || ($0.algorithm == $1.algorithm && $0.inputLengthInBytes < $1.inputLengthInBytes) }
+            let inputOrderIndex = { (input: String) -> Int? in
+                for (i, prefix) in inputOrder.enumerated() {
+                    if input.hasPrefix(prefix) {
+                        return i
+                    }
+                }
+
+                return nil
+            }
+
+            let orderInputs = { (a: String, b: String) -> Bool in
+                guard let aIndex = inputOrderIndex(a) else {
+                    return true
+                }
+
+                guard let bIndex = inputOrderIndex(b) else {
+                    return false
+                }
+
+                if aIndex < bIndex {
+                    return true
+                } else if aIndex > bIndex {
+                    return false
+                } else {
+                    return a < b
+                }
+            }
+
+            let preSelectedData = data.lazy
+                .filter {
+                    ($0.input == selectedInput
+                     || (comparisonAcrossInputsInput == selectedInput
+                         && emptyStringInput != $0.input))
+                    && $0.replacementEffect == selectedReplacementEffect
+                    && algorithmEnabled[$0.algorithm] ?? true }
+                .sorted {
+                    $0.algorithm < $1.algorithm
+                    || ($0.algorithm == $1.algorithm
+                        && $0.inputLengthInBytes < $1.inputLengthInBytes) }
             let xDomain = Set(preSelectedData.lazy.map(\.inputLengthInBytes)).sorted()
             let restrictedXDomain = Array(xDomain.dropFirst(Int(xDomainMin)).dropLast(max(0, xDomain.count - Int(min(Double(xDomain.count), xDomainMax)) - 1)))
             let restrictedXDomainRange = (restrictedXDomain.first ?? 1)...(restrictedXDomain.last ?? 1)
@@ -110,24 +180,28 @@ struct ContentView: View {
                     }
                 }
 
+                let applicableReplacementEffects = Set(data.lazy
+                    .filter {
+                        $0.input == selectedInput
+                        || (comparisonAcrossInputsInput == selectedInput
+                            && emptyStringInput != $0.input) }
+                    .map(\.replacementEffect))
+                    .sorted()
+
                 Picker("Input", selection: $selectedInput) {
-                    ForEach(Set(data.lazy.map(\.input)).sorted(), id: \.self) {
+                    ForEach(Set(data.lazy.map(\.input)).sorted(by: orderInputs) + [comparisonAcrossInputsInput], id: \.self) {
                         Text($0).tag($0)
                     }
                 }.onChange(of: selectedInput) { oldValue, newValue in
                     if newValue != oldValue {
-                        let validReplacementEffects = Set(data.lazy.filter { $0.input == newValue }.map(\.replacementEffect))
-
-                        guard let effect = selectedReplacementEffect, validReplacementEffects.contains(effect) else {
-                            let newReplacementEffect = validReplacementEffects.sorted().first
+                        guard let effect = selectedReplacementEffect, applicableReplacementEffects.contains(effect) else {
+                            let newReplacementEffect = applicableReplacementEffects.sorted().first
                             print("Selected replacement effect (\(selectedReplacementEffect.orNilString)) is no longer valid (input changed from \(oldValue.orNilString) to \(newValue.orNilString)), so setting it to \(newReplacementEffect.orNilString).")
                             selectedReplacementEffect = newReplacementEffect
                             return
                         }
                     }
                 }
-
-                let applicableReplacementEffects = Set(data.lazy.filter { $0.input == selectedInput }.map(\.replacementEffect)).sorted()
 
                 Picker("Replacement effect", selection: $selectedReplacementEffect) {
                     ForEach(applicableReplacementEffects, id: \.self) {
@@ -169,6 +243,55 @@ struct ContentView: View {
                                 y: .value("Algorithm", $0.algorithm))
                     }
                 }.padding()
+            } else if comparisonAcrossInputsInput == selectedInput {
+                let fuckYouSwift: [FuckYouSwift: Double] = Dictionary(grouping: selectedData) { FuckYouSwift(input: $0.input, algorithm: $0.algorithm) }
+                    .mapValues { Double($0.lazy.map { $0.duration / $0.inputLengthInBytes }.reduce(0, +)) / Double($0.count) }
+
+                let aggregatedSelectedData: [FuckYouSwift] = fuckYouSwift
+                    .map { FuckYouSwift(input: $0.input, algorithm: $0.algorithm, averageDurationPerByte: $1) }
+                    .sorted {
+                        $0.algorithm < $1.algorithm
+                        || ($0.algorithm == $1.algorithm
+                            && orderInputs($0.input, $1.input)) }
+
+                Chart {
+                    ForEach(aggregatedSelectedData) {
+                        LineMark(x: .value("Input", $0.input),
+                                 y: .value("Mean runtime per byte", $0.averageDurationPerByte),
+                                 series: .value("Algorithm", $0.algorithm))
+                            .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
+                            .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
+                            .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
+//                            .foregroundStyle(algorithmStyles[$0.0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
+                    }
+                }.chartPlotStyle {
+                    $0.frame(maxWidth: 600, maxHeight: 500)
+                }
+                .chartLegend(position: .trailing, alignment: .leading, spacing: 30)
+                .chartForegroundStyleScale { // This is required for the legend to be drawn.
+                    algorithmColour[$0] ?? .black
+                }
+                .chartSymbolScale {
+                    (algorithmSymbol[$0] ?? .pentagon)
+                }
+                .chartLineStyleScale {
+                    algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
+                }
+                .chartYScale(type: .log)
+                .chartYAxis {
+                    AxisMarks {
+                        if let value = $0.as(Double.self) {
+                            AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
+                        } else {
+                            let _ = print("Y axis value is not an integer.")
+                        }
+
+                        AxisTick()
+                        AxisGridLine()
+                    }
+                }
+                .padding()
+                .padding(.leading, 20)
             } else {
                 let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map(\.duration)
                 let yRange = __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up))
