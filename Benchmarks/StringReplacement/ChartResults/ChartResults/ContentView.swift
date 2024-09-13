@@ -118,11 +118,13 @@ struct ContentView: View {
                     }
                 }
 
-                Picker("Input", selection: $selectedReplacementEffect) {
-                    ForEach(Set(data.lazy.filter { $0.input == selectedInput }.map(\.replacementEffect)).sorted(), id: \.self) {
+                let applicableReplacementEffects = Set(data.lazy.filter { $0.input == selectedInput }.map(\.replacementEffect)).sorted()
+
+                Picker("Replacement effect", selection: $selectedReplacementEffect) {
+                    ForEach(applicableReplacementEffects, id: \.self) {
                         Text($0).tag($0)
                     }
-                }
+                }.disabled(1 >= applicableReplacementEffects.count)
             }.padding()
 
             VStack(alignment: .leading) {
