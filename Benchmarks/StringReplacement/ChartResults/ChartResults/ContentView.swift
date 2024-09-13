@@ -52,8 +52,17 @@ struct ContentView: View {
     @State var selectedInput: String? = nil
     @State var selectedReplacementEffect: String? = nil
 
+    @State var xDomainMin: Double = 0
+    @State var xDomainMax: Double = .infinity
+
     var body: some View {
         VStack {
+            let preSelectedData = data.lazy.filter { $0.input == selectedInput && $0.replacementEffect == selectedReplacementEffect && algorithmEnabled[$0.algorithm] ?? true }.sorted { $0.algorithm < $1.algorithm || ($0.algorithm == $1.algorithm && $0.inputLengthInBytes < $1.inputLengthInBytes) }
+            let xDomain = Set(preSelectedData.lazy.map(\.inputLengthInBytes)).sorted()
+            let restrictedXDomain = Array(xDomain.dropFirst(Int(xDomainMin)).dropLast(max(0, xDomain.count - Int(min(Double(xDomain.count), xDomainMax)) - 1)))
+            let restrictedXDomainRange = (restrictedXDomain.first ?? 1)...(restrictedXDomain.last ?? 1)
+            let selectedData = preSelectedData.filter { restrictedXDomainRange.contains($0.inputLengthInBytes) }
+
             HStack {
                 Button("Import data…") {
                     showFileImporter = true
@@ -125,6 +134,24 @@ struct ContentView: View {
                         Text($0).tag($0)
                     }
                 }.disabled(1 >= applicableReplacementEffects.count)
+
+                Slider(value: $xDomainMin, in: 0...Double(max(1, xDomain.count - 1)), step: 1, label: { Text("X min") })
+                    .disabled(xDomain.isEmpty)
+                    .opacity(emptyStringInput == selectedInput ? 0.0 : 1.0)
+                    .onChange(of: xDomainMax) { _, newValue in
+                        if xDomainMin > newValue {
+                            xDomainMin = newValue
+                        }
+                    }
+
+                Slider(value: $xDomainMax, in: 0...Double(max(1, xDomain.count - 1)), step: 1, label: { Text("X max") })
+                    .disabled(xDomain.isEmpty)
+                    .opacity(emptyStringInput == selectedInput ? 0.0 : 1.0)
+                    .onChange(of: xDomainMin) { _, newValue in
+                        if newValue > xDomainMax {
+                            xDomainMax = newValue
+                        }
+                    }
             }.padding()
 
             VStack(alignment: .leading) {
@@ -143,12 +170,10 @@ struct ContentView: View {
                     }
                 }.padding()
             } else {
-                let selectedData = data.lazy.filter { $0.input == selectedInput && $0.replacementEffect == selectedReplacementEffect && algorithmEnabled[$0.algorithm] ?? true }.sorted { $0.algorithm < $1.algorithm || ($0.algorithm == $1.algorithm && $0.inputLengthInBytes < $1.inputLengthInBytes) }
-                let xDomain = Set(selectedData.lazy.map(\.inputLengthInBytes)).sorted()
-                let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input }.map(\.duration)
+                let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map(\.duration)
                 let yRange = __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up))
 
-                let _ = print("X-axis domain: \(xDomain), Y-axis range: \(yRange)")
+                let _ = print("X-axis domain: \(xDomain)\(xDomain != restrictedXDomain ? " (restricted to: \(restrictedXDomain))" : ""), Y-axis range: \(yRange)")
 
                 Chart {
                     ForEach(selectedData) {
@@ -202,9 +227,9 @@ struct ContentView: View {
                             AxisGridLine()
                         }
                     }
-                    .chartXScale(domain: (xDomain.first ?? 1)...(xDomain.last ?? 1), type: .log)
+                    .chartXScale(domain: restrictedXDomainRange, type: .log)
                     .chartXAxis {
-                        AxisMarks(preset: .aligned, values: xDomain) {
+                        AxisMarks(preset: .aligned, values: restrictedXDomain) {
                             if let value = $0.as(Int.self) {
                                 AxisValueLabel(value.formatted(.byteCount(style: .decimal)))
                             } else {
