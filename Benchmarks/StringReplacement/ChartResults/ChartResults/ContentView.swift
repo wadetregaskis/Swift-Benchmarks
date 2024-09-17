@@ -87,6 +87,8 @@ struct ContentView: View {
     @State var xDomainMin: Double = 0
     @State var xDomainMax: Double = .infinity
 
+    @State var normaliseByInputByteLength = false
+
     var body: some View {
         VStack {
             let inputOrderIndex = { (input: String) -> Int? in
@@ -228,6 +230,11 @@ struct ContentView: View {
                     }
             }.padding()
 
+            Toggle("Normalise by input byte length",
+                   isOn: Binding(get: { comparisonAcrossInputsInput == selectedInput || (emptyStringInput != selectedInput && normaliseByInputByteLength) },
+                                 set: { normaliseByInputByteLength = $0 }))
+                .disabled(emptyStringInput == selectedInput || comparisonAcrossInputsInput == selectedInput)
+
             VStack(alignment: .leading) {
                 ForEach(Set(data.lazy.map(\.algorithm)).sorted(), id: \.self) { algorithm in
                     Toggle(algorithm,
@@ -293,15 +300,19 @@ struct ContentView: View {
                 .padding()
                 .padding(.leading, 20)
             } else {
-                let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map(\.duration)
-                let yRange = __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up))
+                let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map { normaliseByInputByteLength ? $0.duration / $0.inputLengthInBytes : $0.duration }
+                let yRange = (false // i.e. whether to use the Y range naively as-is, or expand it outwards to even multiples of 10 (which helps neaten up the display when using a log Y axis).
+                              ? Double(nonEmptyStringData.min() ?? 1)...Double(nonEmptyStringData.max() ?? 1)
+                              : __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up)))
 
                 let _ = print("X-axis domain: \(xDomain)\(xDomain != restrictedXDomain ? " (restricted to: \(restrictedXDomain))" : ""), Y-axis range: \(yRange)")
 
                 Chart {
                     ForEach(selectedData) {
                         LineMark(x: .value("Input length", $0.inputLengthInBytes),
-                                 y: .value("Runtime", $0.duration),
+                                 y: (normaliseByInputByteLength
+                                     ? .value("Runtime per input byte", $0.duration / $0.inputLengthInBytes)
+                                     : .value("Runtime", $0.duration)),
                                  series: .value("Algorithm", $0.algorithm))
                             .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
                             .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
@@ -364,7 +375,7 @@ struct ContentView: View {
                         }
                     }
                     .chartXAxisLabel("Input length", alignment: .center)
-                    .chartYAxisLabel("Runtime", position: .trailing, alignment: .center, spacing: -10)
+                    .chartYAxisLabel(normaliseByInputByteLength ? "Runtime per input byte" : "Runtime", position: .trailing, alignment: .center, spacing: -10)
                     .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
                         if let selectedInput {
                             if let selectedReplacementEffect {
