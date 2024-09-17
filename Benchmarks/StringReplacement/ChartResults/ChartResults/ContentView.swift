@@ -88,37 +88,58 @@ struct ContentView: View {
     @State var xDomainMax: Double = .infinity
 
     @State var normaliseByInputByteLength = false
+    @State var showASCIIInputsInComparisonChart = false
+
+    static func inputOrderIndex(_ input: String) -> Int? {
+        for (i, prefix) in inputOrder.enumerated() {
+            if input.hasPrefix(prefix) {
+                return i
+            }
+        }
+
+        return nil
+    }
+
+    static func orderInputs(_ a: String, _ b: String) -> Bool {
+        guard let aIndex = inputOrderIndex(a) else {
+            return true
+        }
+
+        guard let bIndex = inputOrderIndex(b) else {
+            return false
+        }
+
+        if aIndex < bIndex {
+            return true
+        } else if aIndex > bIndex {
+            return false
+        } else {
+            return a < b
+        }
+    }
+
+    func fuckYouSwift(_ selectedData: [Record]) -> [FuckYouSwift] {
+        let fuckYouFuckingSwift: [FuckYouSwift: Double] = Dictionary(grouping: selectedData.lazy.filter {
+            showASCIIInputsInComparisonChart == ($0.input.hasSuffix(" (ASCII)") as Bool)
+        }) {
+            FuckYouSwift(input: $0.input, algorithm: $0.algorithm)
+        }.mapValues {
+            Double($0.lazy
+                .map { $0.duration / $0.inputLengthInBytes }
+                .reduce(0, +))
+            / Double($0.count)
+        }
+
+        return fuckYouFuckingSwift
+            .map { FuckYouSwift(input: $0.input, algorithm: $0.algorithm, averageDurationPerByte: $1) }
+            .sorted {
+                $0.algorithm < $1.algorithm
+                || ($0.algorithm == $1.algorithm
+                    && Self.orderInputs($0.input, $1.input)) }
+    }
 
     var body: some View {
         VStack {
-            let inputOrderIndex = { (input: String) -> Int? in
-                for (i, prefix) in inputOrder.enumerated() {
-                    if input.hasPrefix(prefix) {
-                        return i
-                    }
-                }
-
-                return nil
-            }
-
-            let orderInputs = { (a: String, b: String) -> Bool in
-                guard let aIndex = inputOrderIndex(a) else {
-                    return true
-                }
-
-                guard let bIndex = inputOrderIndex(b) else {
-                    return false
-                }
-
-                if aIndex < bIndex {
-                    return true
-                } else if aIndex > bIndex {
-                    return false
-                } else {
-                    return a < b
-                }
-            }
-
             let preSelectedData = data.lazy
                 .filter {
                     ($0.input == selectedInput
@@ -191,7 +212,7 @@ struct ContentView: View {
                     .sorted()
 
                 Picker("Input", selection: $selectedInput) {
-                    ForEach(Set(data.lazy.map(\.input)).sorted(by: orderInputs) + [comparisonAcrossInputsInput], id: \.self) {
+                    ForEach(Set(data.lazy.map(\.input)).sorted(by: Self.orderInputs) + [comparisonAcrossInputsInput], id: \.self) {
                         Text($0).tag($0)
                     }
                 }.onChange(of: selectedInput) { oldValue, newValue in
@@ -230,10 +251,17 @@ struct ContentView: View {
                     }
             }.padding()
 
-            Toggle("Normalise by input byte length",
-                   isOn: Binding(get: { comparisonAcrossInputsInput == selectedInput || (emptyStringInput != selectedInput && normaliseByInputByteLength) },
-                                 set: { normaliseByInputByteLength = $0 }))
-                .disabled(emptyStringInput == selectedInput || comparisonAcrossInputsInput == selectedInput)
+            HStack {
+                Toggle("Normalise by input byte length",
+                       isOn: Binding(get: { comparisonAcrossInputsInput == selectedInput || (emptyStringInput != selectedInput && normaliseByInputByteLength) },
+                                     set: { normaliseByInputByteLength = $0 }))
+                    .disabled(emptyStringInput == selectedInput || comparisonAcrossInputsInput == selectedInput)
+
+                Toggle("ASCII inputs", isOn: $showASCIIInputsInComparisonChart)
+                    .disabled(comparisonAcrossInputsInput != selectedInput)
+                    .opacity(comparisonAcrossInputsInput == selectedInput ? 1 : 0)
+                    .padding(.leading)
+            }
 
             VStack(alignment: .leading) {
                 ForEach(Set(data.lazy.map(\.algorithm)).sorted(), id: \.self) { algorithm in
@@ -251,15 +279,7 @@ struct ContentView: View {
                     }
                 }.padding()
             } else if comparisonAcrossInputsInput == selectedInput {
-                let fuckYouSwift: [FuckYouSwift: Double] = Dictionary(grouping: selectedData) { FuckYouSwift(input: $0.input, algorithm: $0.algorithm) }
-                    .mapValues { Double($0.lazy.map { $0.duration / $0.inputLengthInBytes }.reduce(0, +)) / Double($0.count) }
-
-                let aggregatedSelectedData: [FuckYouSwift] = fuckYouSwift
-                    .map { FuckYouSwift(input: $0.input, algorithm: $0.algorithm, averageDurationPerByte: $1) }
-                    .sorted {
-                        $0.algorithm < $1.algorithm
-                        || ($0.algorithm == $1.algorithm
-                            && orderInputs($0.input, $1.input)) }
+                let aggregatedSelectedData = fuckYouSwift(selectedData)
 
                 Chart {
                     ForEach(aggregatedSelectedData) {
@@ -303,7 +323,7 @@ struct ContentView: View {
                                  alignment: .center,
                                  spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
                 .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
-                    let coreTitle = Text("Comparison across inputs").font(.headline)
+                    let coreTitle = Text("Comparison across \(showASCIIInputsInComparisonChart ? "ASCII " : "")inputs").font(.headline)
                     let fuckYouSwift = restrictedXDomain.map(Int64.init).formatted(.list(memberStyle: ByteCountFormatStyle(style: .decimal),
                                                                          type: .and,
                                                                          width: .short))
