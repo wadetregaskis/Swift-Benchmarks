@@ -297,6 +297,35 @@ struct ContentView: View {
                         AxisGridLine()
                     }
                 }
+                .chartXAxisLabel("Input", alignment: .center)
+                .chartYAxisLabel("Runtime per input byte",
+                                 position: .trailing,
+                                 alignment: .center,
+                                 spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
+                .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
+                    let coreTitle = Text("Comparison across inputs").font(.headline)
+                    let fuckYouSwift = restrictedXDomain.map(Int64.init).formatted(.list(memberStyle: ByteCountFormatStyle(style: .decimal),
+                                                                         type: .and,
+                                                                         width: .short))
+
+                    let result = if let restrictedXDomainMin = restrictedXDomain.first {
+                        if 1 < restrictedXDomain.count {
+                            Text("""
+                                 \(coreTitle)
+                                 \(Text("Mean of input byte lengths \(fuckYouSwift)").font(.subheadline))
+                                 """)
+                        } else {
+                            Text("""
+                                 \(coreTitle)
+                                 \(Text("Input byte length \(restrictedXDomainMin.formatted())").font(.subheadline))
+                                 """)
+                        }
+                    } else {
+                        coreTitle
+                    }
+
+                    return result.multilineTextAlignment(.center)
+                }
                 .padding()
                 .padding(.leading, 20)
             } else {
