@@ -375,7 +375,10 @@ struct ContentView: View {
                         }
                     }
                     .chartXAxisLabel("Input length", alignment: .center)
-                    .chartYAxisLabel(normaliseByInputByteLength ? "Runtime per input byte" : "Runtime", position: .trailing, alignment: .center, spacing: -10)
+                    .chartYAxisLabel(normaliseByInputByteLength ? "Runtime per input byte" : "Runtime",
+                                     position: .trailing,
+                                     alignment: .center,
+                                     spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
                     .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
                         if let selectedInput {
                             if let selectedReplacementEffect {
