@@ -8,6 +8,7 @@
 import Charts
 import Darwin
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct Record: Identifiable {
     let id: Int
@@ -138,6 +139,10 @@ struct ContentView: View {
                     && Self.orderInputs($0.input, $1.input)) }
     }
 
+    @Environment(\.displayScale) var displayScale
+
+    @State var chartSize = CGSize(width: 0, height: 0)
+
     var body: some View {
         VStack {
             let preSelectedData = data.lazy
@@ -152,9 +157,6 @@ struct ContentView: View {
                     || ($0.algorithm == $1.algorithm
                         && $0.inputLengthInBytes < $1.inputLengthInBytes) }
             let xDomain = Set(preSelectedData.lazy.map(\.inputLengthInBytes)).sorted()
-            let restrictedXDomain = Array(xDomain.dropFirst(Int(xDomainMin)).dropLast(max(0, xDomain.count - Int(min(Double(xDomain.count), xDomainMax)) - 1)))
-            let restrictedXDomainRange = (restrictedXDomain.first ?? 1)...(restrictedXDomain.last ?? 1)
-            let selectedData = preSelectedData.filter { restrictedXDomainRange.contains($0.inputLengthInBytes) }
 
             HStack {
                 Button("Import data…") {
@@ -271,140 +273,249 @@ struct ContentView: View {
                 }
             }.padding()
 
-            if emptyStringInput == selectedInput {
-                let emptyStringData = data.filter { emptyStringInput == $0.input }.map(\.duration)
-                let xRange = __exp10(log10(Double(emptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.max() ?? 1)).rounded(.up))
+            let (chart, title) = chart(preSelectedData: preSelectedData, xDomain: xDomain)
 
-                Chart {
-                    ForEach(data.lazy.filter { emptyStringInput == $0.input && algorithmEnabled[$0.algorithm] ?? true }) { datum in
-                        BarMark(x: .value("Runtime", datum.duration),
-                                y: .value("Algorithm", datum.algorithm))
+            chart
+                .onDrag {
+                    let renderer = ImageRenderer(content: chart.frame(width: chartSize.width, height: chartSize.height))
+
+                    renderer.isOpaque = false
+                    renderer.scale = displayScale
+                    renderer.colorMode = .extendedLinear
+
+                    let result = NSItemProvider()
+
+                    result.suggestedName = title
+
+                    guard let image = renderer.nsImage else {
+                        print("Unable to render chart as an NSImage.")
+                        return result
+                    }
+
+                    print("Providing file for drag…")
+
+                    let folder: URL
+
+                    do {
+                        folder = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: .temporaryDirectory, create: true)
+                    } catch {
+                        print("Unable to create temporary folder, error:", error)
+                        result.registerObject(image, visibility: .all)
+                        return result
+                    }
+
+                    let url = folder.appending(path: title + ".tiff", directoryHint: .notDirectory)
+
+                    print("Writing temporary file for drag to:", url)
+
+                    guard let tiffData = image.tiffRepresentation(using: .lzw, factor: 1) else {
+                        print("Unable to save image as a TIFF.")
+                        result.registerObject(image, visibility: .all)
+                        return result
+                    }
+
+                    do {
+                        try tiffData.write(to: url, options: .withoutOverwriting)
+                    } catch {
+                        print("Unable to write image, as a TIFF, to \(url), error:", error)
+                        result.registerObject(image, visibility: .all)
+                        return result
+                    }
+
+                    result.registerObject(url as NSURL, visibility: .all)
+                    result.registerObject(image, visibility: .all)
+
+                    return result
+                }
+                .overlay {
+                    GeometryReader { geometryProxy in
+                        let size = geometryProxy.size
+
+                        print("Chart size will change:", size)
+
+                        DispatchQueue.main.async {
+                            chartSize = size
+                            print("Chart size changed:", chartSize)
+                        }
+
+                        return Rectangle().opacity(0)
+                    }
+                }
+        }
+
+        Spacer(minLength: 0)
+    }
+
+    func chart(preSelectedData: [Record], xDomain: [Int]) -> (AnyView, String) {
+        let restrictedXDomain = Array(xDomain.dropFirst(Int(xDomainMin)).dropLast(max(0, xDomain.count - Int(min(Double(xDomain.count), xDomainMax)) - 1)))
+        let restrictedXDomainRange = (restrictedXDomain.first ?? 1)...(restrictedXDomain.last ?? 1)
+        let selectedData = preSelectedData.filter { restrictedXDomainRange.contains($0.inputLengthInBytes) }
+
+        if emptyStringInput == selectedInput {
+            let emptyStringData = data.filter { emptyStringInput == $0.input }.map(\.duration)
+            let xRange = __exp10(log10(Double(emptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.max() ?? 1)).rounded(.up))
+
+            return (
+                AnyView(
+                    Chart {
+                        ForEach(data.lazy.filter { emptyStringInput == $0.input && algorithmEnabled[$0.algorithm] ?? true }) { datum in
+                            BarMark(x: .value("Runtime", datum.duration),
+                                    y: .value("Algorithm", datum.algorithm))
                             .foregroundStyle(by: .value("Algorithm", datum.algorithm))
                             .annotation(position: .overlay, alignment: .trailing, spacing: nil) {
                                 Text("\(Measurement(value: Double(datum.duration), unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))").font(.caption)
                             }
-                    }
-                }
-                .chartLegend(.hidden)
-                .chartForegroundStyleScale { // This is required for the legend to be drawn.
-                    algorithmColour[$0] ?? .black
-                }
-                .chartXScale(domain: xRange, type: .linear) // Should be .log, but Swift Charts has a bug whereby using .log here results in no bars being rendered at all. 😤
-                .chartYAxis {
-                    AxisMarks(position: .leading) {
-                        AxisValueLabel(centered: true, anchor: .trailing)
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks {
-                        if let value = $0.as(Double.self) {
-                            AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
-                        } else {
-                            let _ = print("X axis (runtime) value is not an integer.")
                         }
-
-                        AxisTick()
-                        AxisGridLine()
                     }
-                }
-                .padding()
-                .padding(.leading, 1200)
-            } else if comparisonAcrossInputsInput == selectedInput {
-                let aggregatedSelectedData = fuckYouSwift(selectedData)
-
-                Chart {
-                    ForEach(aggregatedSelectedData) {
-                        LineMark(x: .value("Input", $0.input),
-                                 y: .value("Mean runtime per byte", $0.averageDurationPerByte),
-                                 series: .value("Algorithm", $0.algorithm))
-                            .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
-                            .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
-                            .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
-//                            .foregroundStyle(algorithmStyles[$0.0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
-                    }
-                }.chartPlotStyle {
-                    $0.frame(maxWidth: 600, maxHeight: 500)
-                }
-                .chartLegend(position: .trailing, alignment: .leading, spacing: 30)
-                .chartForegroundStyleScale { // This is required for the legend to be drawn.
-                    algorithmColour[$0] ?? .black
-                }
-                .chartSymbolScale {
-                    (algorithmSymbol[$0] ?? .pentagon)
-                }
-                .chartLineStyleScale {
-                    algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
-                }
-                .chartYScale(type: .log)
-                .chartYAxis {
-                    AxisMarks {
-                        if let value = $0.as(Double.self) {
-                            AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
-                        } else {
-                            let _ = print("Y axis (runtime) value is not an integer.")
+                        .chartLegend(.hidden)
+                        .chartForegroundStyleScale { // This is required for the legend to be drawn.
+                            algorithmColour[$0] ?? .black
                         }
-
-                        AxisTick()
-                        AxisGridLine()
-                    }
-                }
-                .chartXAxisLabel("Input", alignment: .center)
-                .chartYAxisLabel("Runtime per input byte",
-                                 position: .trailing,
-                                 alignment: .center,
-                                 spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
-                .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
-                    let coreTitle = Text("Comparison across \(showASCIIInputsInComparisonChart ? "ASCII " : "")inputs").font(.headline)
-                    let fuckYouSwift = restrictedXDomain.map(Int64.init).formatted(.list(memberStyle: ByteCountFormatStyle(style: .decimal),
-                                                                         type: .and,
-                                                                         width: .short))
-
-                    let result = if let restrictedXDomainMin = restrictedXDomain.first {
-                        if 1 < restrictedXDomain.count {
-                            Text("""
-                                 \(coreTitle)
-                                 \(Text("Mean of input byte lengths \(fuckYouSwift)").font(.subheadline))
-                                 """)
-                        } else {
-                            Text("""
-                                 \(coreTitle)
-                                 \(Text("Input byte length \(restrictedXDomainMin.formatted())").font(.subheadline))
-                                 """)
+                        .chartXScale(domain: xRange, type: .linear) // Should be .log, but Swift Charts has a bug whereby using .log here results in no bars being rendered at all. 😤
+                        .chartYAxis {
+                            AxisMarks(position: .leading) {
+                                AxisValueLabel(centered: true, anchor: .trailing)
+                            }
                         }
-                    } else {
-                        coreTitle
-                    }
+                        .chartXAxis {
+                            AxisMarks {
+                                if let value = $0.as(Double.self) {
+                                    AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
+                                } else {
+                                    let _ = print("X axis (runtime) value is not an integer.")
+                                }
 
-                    return result.multilineTextAlignment(.center)
+                                AxisTick()
+                                AxisGridLine()
+                            }
+                        }
+                        .padding()
+                        .padding(.leading, 1200)),
+                "Empty string")
+        } else if comparisonAcrossInputsInput == selectedInput {
+            let aggregatedSelectedData = fuckYouSwift(selectedData)
+
+            let title = "Comparison across \(showASCIIInputsInComparisonChart ? "ASCII " : "")inputs"
+
+            let fuckYouSwift = restrictedXDomain.map(Int64.init).formatted(.list(memberStyle: ByteCountFormatStyle(style: .decimal),
+                                                                                 type: .and,
+                                                                                 width: .short))
+
+            let subtitle: String? = if let restrictedXDomainMin = restrictedXDomain.first {
+                if 1 < restrictedXDomain.count {
+                    "Mean of input byte lengths \(fuckYouSwift)"
+                } else {
+                    "Input byte length \(restrictedXDomainMin.formatted())"
                 }
-                .padding()
-                .padding(.leading, 20)
             } else {
-                let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map { normaliseByInputByteLength ? $0.duration / $0.inputLengthInBytes : $0.duration }
-                let yRange = (false // i.e. whether to use the Y range naively as-is, or expand it outwards to even multiples of 10 (which helps neaten up the display when using a log Y axis).
-                              ? Double(nonEmptyStringData.min() ?? 1)...Double(nonEmptyStringData.max() ?? 1)
-                              : __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up)))
+                nil
+            }
 
-                let _ = print("X-axis domain: \(xDomain)\(xDomain != restrictedXDomain ? " (restricted to: \(restrictedXDomain))" : ""), Y-axis range: \(yRange)")
+            let fileTitle = if let subtitle {
+                "\(title) (\(subtitle))"
+            } else {
+                title
+            }
 
-                Chart {
-                    ForEach(selectedData) {
-                        LineMark(x: .value("Input length", $0.inputLengthInBytes),
-                                 y: (normaliseByInputByteLength
-                                     ? .value("Runtime per input byte", $0.duration / $0.inputLengthInBytes)
-                                     : .value("Runtime", $0.duration)),
-                                 series: .value("Algorithm", $0.algorithm))
+            return (
+                AnyView(
+                    Chart {
+                        ForEach(aggregatedSelectedData) {
+                            LineMark(x: .value("Input", $0.input),
+                                     y: .value("Mean runtime per byte", $0.averageDurationPerByte),
+                                     series: .value("Algorithm", $0.algorithm))
                             .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
                             .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
                             .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
-//                            .foregroundStyle(algorithmStyles[$0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
+                                                                           //                            .foregroundStyle(algorithmStyles[$0.0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
+                        }
+                    }.chartPlotStyle {
+                        $0.frame(maxWidth: 600, maxHeight: 500)
                     }
-                }.chartPlotStyle {
-                    $0.frame(maxWidth: 600, maxHeight: 500)
+                        .chartLegend(position: .trailing, alignment: .leading, spacing: 30)
+                        .chartForegroundStyleScale { // This is required for the legend to be drawn.
+                            algorithmColour[$0] ?? .black
+                        }
+                        .chartSymbolScale {
+                            (algorithmSymbol[$0] ?? .pentagon)
+                        }
+                        .chartLineStyleScale {
+                            algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
+                        }
+                        .chartYScale(type: .log)
+                        .chartYAxis {
+                            AxisMarks {
+                                if let value = $0.as(Double.self) {
+                                    AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
+                                } else {
+                                    let _ = print("Y axis (runtime) value is not an integer.")
+                                }
+
+                                AxisTick()
+                                AxisGridLine()
+                            }
+                        }
+                        .chartXAxisLabel("Input", alignment: .center)
+                        .chartYAxisLabel("Runtime per input byte",
+                                         position: .trailing,
+                                         alignment: .center,
+                                         spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
+                        .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
+                            let result = if let subtitle {
+                                Text("""
+                                     \(Text(title).font(.headline))
+                                     \(Text(subtitle).font(.subheadline))
+                                     """)
+                            } else {
+                                Text(title).font(.headline)
+                            }
+
+                            return result.multilineTextAlignment(.center)
+                        }
+                        .padding()
+                        .padding(.leading, 20)),
+                fileTitle)
+        } else {
+            let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map { normaliseByInputByteLength ? $0.duration / $0.inputLengthInBytes : $0.duration }
+            let yRange = (false // i.e. whether to use the Y range naively as-is, or expand it outwards to even multiples of 10 (which helps neaten up the display when using a log Y axis).
+                          ? Double(nonEmptyStringData.min() ?? 1)...Double(nonEmptyStringData.max() ?? 1)
+                          : __exp10(log10(Double(nonEmptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(nonEmptyStringData.max() ?? 1)).rounded(.up)))
+
+            let _ = print("X-axis domain: \(xDomain)\(xDomain != restrictedXDomain ? " (restricted to: \(restrictedXDomain))" : ""), Y-axis range: \(yRange)")
+
+            let title = selectedInput
+            let subtitle = selectedReplacementEffect
+
+            let fileTitle = if let title {
+                if let subtitle {
+                    "\(title) (\(subtitle))"
+                } else {
+                    title
                 }
-                .chartLegend(position: .trailing, alignment: .leading, spacing: 30) /*{
-                    VStack() {
-                        let algorithms = Set(selectedData.map(\.algorithm)).sorted()
+            } else {
+                "Unknown"
+            }
+
+            return (
+                AnyView(
+                    Chart {
+                        ForEach(selectedData) {
+                            LineMark(x: .value("Input length", $0.inputLengthInBytes),
+                                     y: (normaliseByInputByteLength
+                                         ? .value("Runtime per input byte", $0.duration / $0.inputLengthInBytes)
+                                         : .value("Runtime", $0.duration)),
+                                     series: .value("Algorithm", $0.algorithm))
+                            .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
+                            .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
+                            .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
+                                                                           //                            .foregroundStyle(algorithmStyles[$0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
+                        }
+                    }.chartPlotStyle {
+                        $0.frame(maxWidth: 600, maxHeight: 500)
+                    }
+                    .chartLegend(position: .trailing, alignment: .leading, spacing: 30) /*{
+                        VStack() {
+                            let algorithms = Set(selectedData.map(\.algorithm)).sorted()
 
 //                            ForEach(algorithms, id: \String.self) { // The compiler just hangs if ForEach is used inside the chartLegend contents, irrespective of what collection or ID keypath is used. 😤
 //                                HStack {
@@ -414,17 +525,17 @@ struct ContentView: View {
 //                                    Text($0).foregroundColor(.black)
 //                                }
 //                            }
-                    }
-                }*/
+                        }
+                    }*/
                     .chartForegroundStyleScale { // This is required for the legend to be drawn.
                         algorithmColour[$0] ?? .black
                     }
                     .chartSymbolScale {
                         (algorithmSymbol[$0] ?? .pentagon)
                     }
-//                        .chartSymbolSizeScale { // The compiler just hangs if this modifier is used, irrespective of what its contents are. 😤
-//                            min(4, lineWidth)
-//                        }
+//                    .chartSymbolSizeScale { // The compiler just hangs if this modifier is used, irrespective of what its contents are. 😤
+//                        min(4, lineWidth)
+//                    }
                     .chartLineStyleScale {
                         algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
                     }
@@ -460,23 +571,21 @@ struct ContentView: View {
                                      alignment: .center,
                                      spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
                     .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
-                        if let selectedInput {
-                            if let selectedReplacementEffect {
+                        if let title {
+                            if let subtitle {
                                 Text("""
-                                     \(Text(selectedInput).font(.headline))
-                                     \(Text(selectedReplacementEffect).font(.subheadline))
+                                     \(Text(title).font(.headline))
+                                     \(Text(subtitle).font(.subheadline))
                                      """).multilineTextAlignment(.center)
                             } else {
-                                Text(selectedInput).font(.headline)
+                                Text(title).font(.headline)
                             }
                         }
                     }
                     .padding()
-                    .padding(.leading, 20)
-            }
+                    .padding(.leading, 20)),
+                fileTitle)
         }
-
-        Spacer(minLength: 0)
     }
 }
 
