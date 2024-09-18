@@ -341,7 +341,7 @@ struct ContentView: View {
                         if let value = $0.as(Double.self) {
                             AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
                         } else {
-                            let _ = print("Y axis value is not an integer.")
+                            let _ = print("Y axis (runtime) value is not an integer.")
                         }
 
                         AxisTick()
