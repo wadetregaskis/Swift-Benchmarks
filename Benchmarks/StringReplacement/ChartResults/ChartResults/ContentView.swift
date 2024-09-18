@@ -272,12 +272,43 @@ struct ContentView: View {
             }.padding()
 
             if emptyStringInput == selectedInput {
+                let emptyStringData = data.filter { emptyStringInput == $0.input }.map(\.duration)
+                let xRange = __exp10(log10(Double(emptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.max() ?? 1)).rounded(.up))
+
                 Chart {
-                    ForEach(data.lazy.filter { algorithmEnabled[$0.algorithm] ?? true }) {
-                        BarMark(x: .value("Runtime (Nanoseconds)", $0.duration),
-                                y: .value("Algorithm", $0.algorithm))
+                    ForEach(data.lazy.filter { emptyStringInput == $0.input && algorithmEnabled[$0.algorithm] ?? true }) { datum in
+                        BarMark(x: .value("Runtime", datum.duration),
+                                y: .value("Algorithm", datum.algorithm))
+                            .foregroundStyle(by: .value("Algorithm", datum.algorithm))
+                            .annotation(position: .overlay, alignment: .trailing, spacing: nil) {
+                                Text("\(Measurement(value: Double(datum.duration), unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))").font(.caption)
+                            }
                     }
-                }.padding()
+                }
+                .chartLegend(.hidden)
+                .chartForegroundStyleScale { // This is required for the legend to be drawn.
+                    algorithmColour[$0] ?? .black
+                }
+                .chartXScale(domain: xRange, type: .linear) // Should be .log, but Swift Charts has a bug whereby using .log here results in no bars being rendered at all. 😤
+                .chartYAxis {
+                    AxisMarks(position: .leading) {
+                        AxisValueLabel(centered: true, anchor: .trailing)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks {
+                        if let value = $0.as(Double.self) {
+                            AxisValueLabel(Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))
+                        } else {
+                            let _ = print("X axis (runtime) value is not an integer.")
+                        }
+
+                        AxisTick()
+                        AxisGridLine()
+                    }
+                }
+                .padding()
+                .padding(.leading, 1200)
             } else if comparisonAcrossInputsInput == selectedInput {
                 let aggregatedSelectedData = fuckYouSwift(selectedData)
 
