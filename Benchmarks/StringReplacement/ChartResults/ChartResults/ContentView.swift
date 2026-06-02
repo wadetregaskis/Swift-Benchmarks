@@ -425,6 +425,10 @@ struct ContentView: View {
                                 AxisGridLine()
                             }
                         }
+                        .chartXAxisLabel("Runtime", position: .bottom, alignment: .center)
+                        .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
+                            Text("Empty string").font(.headline)
+                        }
                         .padding()
                         .padding(.leading, 1008)
                         .padding(.trailing, 18)),
