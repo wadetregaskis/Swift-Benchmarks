@@ -563,8 +563,8 @@ struct ContentView: View {
                     .chartSymbolScale {
                         (algorithmSymbol[$0] ?? .pentagon)
                     }
-//                    .chartSymbolSizeScale { // The compiler just hangs if this modifier is used, irrespective of what its contents are. 😤
-//                        min(4, lineWidth)
+//                    .chartSymbolSizeScale { (_: String) in
+//                        34
 //                    }
                     .chartLineStyleScale {
                         algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
