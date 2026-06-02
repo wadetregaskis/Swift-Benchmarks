@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 
 import PackageDescription
 
@@ -9,7 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/attaswift/BigInt.git", .upToNextMajor(from: "5.3.0")),
-        .package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.11.2")),
+        .package(url: "https://github.com/ordo-one/benchmark", .upToNextMajor(from: "1.11.2"), traits: []),
         .package(url: "https://github.com/oscbyspro/Numberick.git", branch: "main"),
         .package(url: "https://github.com/pointfreeco/swift-gen.git",  .upToNextMajor(from: "0.4.0")),
         .package(url: "https://github.com/wadetregaskis/FoundationExtensions.git", .upToNextMajor(from: "3.4.0")),
