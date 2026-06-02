@@ -466,7 +466,7 @@ struct ContentView: View {
                             algorithmColour[$0] ?? .black
                         }
                         .chartSymbolScale {
-                            (algorithmSymbol[$0] ?? .pentagon)
+                            (algorithmSymbol[$0] ?? .pentagon).strokeBorder(lineWidth: .greatestFiniteMagnitude)
                         }
                         .chartLineStyleScale {
                             algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
@@ -561,7 +561,7 @@ struct ContentView: View {
                         algorithmColour[$0] ?? .black
                     }
                     .chartSymbolScale {
-                        (algorithmSymbol[$0] ?? .pentagon)
+                        (algorithmSymbol[$0] ?? .pentagon).strokeBorder(lineWidth: .greatestFiniteMagnitude)
                     }
 //                    .chartSymbolSizeScale { (_: String) in
 //                        34
