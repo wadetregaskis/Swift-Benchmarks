@@ -508,7 +508,7 @@ struct ContentView: View {
                             .foregroundStyle(by: .value("Algorithm", $0.algorithm)) // This is required in order for .chartForegroundStyleScale to work, and therefore for the legend to be drawn.
                             .lineStyle(by: .value("Algorithm", $0.algorithm)) // Similar to the above, for .chartLineStyleScale, and to have the line style reflected in the legend.
                             .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
-                                                                           //                            .foregroundStyle(algorithmStyles[$0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
+//                            .foregroundStyle(algorithmStyles[$0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
                         }
                     }.chartPlotStyle {
                         $0.frame(maxWidth: 600, maxHeight: 500)
