@@ -43,6 +43,10 @@ let package = Package(
                 .product(name: "Gen", package: "swift-gen"),
             ],
             path: "Benchmarks/StringReplacement",
+            exclude: [
+                "ChartResults",
+                "Output data munging commands.md",
+            ],
             plugins: [
                 .plugin(name: "BenchmarkPlugin", package: "package-benchmark")
             ]
