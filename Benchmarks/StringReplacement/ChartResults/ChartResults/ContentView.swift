@@ -386,12 +386,19 @@ struct ContentView: View {
             return (
                 AnyView(
                     Chart {
-                        ForEach(data.lazy.filter { emptyStringInput == $0.input && algorithmEnabled[$0.algorithm] ?? true }) { datum in
-                            BarMark(x: .value("Runtime", datum.duration),
+                        ForEach(emptyStringData) { datum in
+                            let labelProbablyFits = (log10(Double(datum.duration)) - log10(xRange.lowerBound)) > ((log10(xRange.upperBound) - log10(xRange.lowerBound)) / 5)
+
+                            BarMark(xStart: .value("Runtime", Int(xRange.lowerBound)),
+                                    xEnd: .value("Runtime", datum.duration),
                                     y: .value("Algorithm", datum.algorithm))
                             .foregroundStyle(by: .value("Algorithm", datum.algorithm))
-                            .annotation(position: .overlay, alignment: .trailing, spacing: nil) {
-                                Text("\(Measurement(value: Double(datum.duration), unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))").font(.caption)
+                            .annotation(position: labelProbablyFits ? .overlay : .trailing,
+                                        alignment: labelProbablyFits ? .trailing : .leading,
+                                        spacing: nil) {
+                                Text("\(Measurement(value: Double(datum.duration), unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated)))")
+                                    .font(.caption)
+                                    .foregroundStyle(labelProbablyFits ? .white : Color(nsColor: .darkGray))
                             }
                         }
                     }
