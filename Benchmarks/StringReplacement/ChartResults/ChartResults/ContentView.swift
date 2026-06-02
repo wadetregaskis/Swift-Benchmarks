@@ -372,7 +372,15 @@ struct ContentView: View {
         let selectedData = preSelectedData.filter { restrictedXDomainRange.contains($0.inputLengthInBytes) }
 
         if emptyStringInput == selectedInput {
-            let emptyStringData = data.filter { emptyStringInput == $0.input }.map(\.duration)
+            let emptyStringData = data
+                .filter {
+                    emptyStringInput == $0.input
+                    && algorithmEnabled[$0.algorithm] ?? true
+                }
+                .sorted {
+                    $0.algorithm < $1.algorithm
+                }
+
             let xRange = __exp10(log10(Double(emptyStringData.lazy.map(\.duration).min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.lazy.map(\.duration).max() ?? 1)).rounded(.up))
 
             return (
