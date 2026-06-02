@@ -426,7 +426,8 @@ struct ContentView: View {
                             }
                         }
                         .padding()
-                        .padding(.leading, 1200)),
+                        .padding(.leading, 1008)
+                        .padding(.trailing, 18)),
                 "Empty string")
         } else if comparisonAcrossInputsInput == selectedInput {
             let aggregatedSelectedData = fuckYouSwift(selectedData)
