@@ -372,7 +372,7 @@ struct ContentView: View {
 
         if emptyStringInput == selectedInput {
             let emptyStringData = data.filter { emptyStringInput == $0.input }.map(\.duration)
-            let xRange = __exp10(log10(Double(emptyStringData.min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.max() ?? 1)).rounded(.up))
+            let xRange = __exp10(log10(Double(emptyStringData.lazy.map(\.duration).min() ?? 1)).rounded(.down))...__exp10(log10(Double(emptyStringData.lazy.map(\.duration).max() ?? 1)).rounded(.up))
 
             return (
                 AnyView(
@@ -390,7 +390,7 @@ struct ContentView: View {
                         .chartForegroundStyleScale { // This is required for the legend to be drawn.
                             algorithmColour[$0] ?? .black
                         }
-                        .chartXScale(domain: xRange, type: .linear) // Should be .log, but Swift Charts has a bug whereby using .log here results in no bars being rendered at all. 😤
+                        .chartXScale(domain: xRange, type: .log)
                         .chartYAxis {
                             AxisMarks(position: .leading) {
                                 AxisValueLabel(centered: true, anchor: .trailing)
