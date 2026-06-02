@@ -92,6 +92,9 @@ struct ContentView: View {
     @State var showASCIIInputsInComparisonChart = false
 
     @State var yAxisLabelPadding: CGFloat = 0
+    @State var legendWidth: CGFloat = 400
+    @State var swatchWidth: CGFloat = 0.5 + lineWidth + (2 * lineWidth * 4) // i.e. 27.5, for line width 3.  15.5 is another good option.
+
     @State var showLegend = true
 
     static func inputOrderIndex(_ input: String) -> Int? {
@@ -283,6 +286,28 @@ struct ContentView: View {
                         Text("\(yAxisLabelPadding.formatted())").font(.caption)
                     }
                 }
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Legend width:")
+
+                    VStack {
+                        Slider(value: $legendWidth, in: 100...1000, step: 1)
+                            .frame(maxWidth: 200)
+                            .padding(.leading)
+                        Text("\(legendWidth.formatted())").font(.caption)
+                    }
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Swatch width:")
+
+                    VStack {
+                        Slider(value: $swatchWidth, in: lineWidth...(10 * lineWidth), step: 0.5)
+                            .frame(maxWidth: 200)
+                            .padding(.leading)
+                        Text("\(swatchWidth.formatted())").font(.caption)
+                    }
+                }
             }
 
             VStack(alignment: .leading) {
@@ -470,11 +495,43 @@ struct ContentView: View {
                             .symbol(by: .value("Algorithm", $0.algorithm)) // And likewise, this indirect method has to be used otherwise the legend doesn't reflect the symbols (even though the data series' do).
                                                                            //                            .foregroundStyle(algorithmStyles[$0.0.algorithm] ?? .black) // If you use this you cannot use chart legends (Swift Charts just silently refuses to render them), and that is not documented anywhere.  But plenty of Apple sample code & documentation recommends using this modifier anyway. 😤
                         }
-                    }.chartPlotStyle {
-                        $0.frame(maxWidth: 600, maxHeight: 500)
-                    }
-                        .chartLegend(position: .trailing, alignment: .leading, spacing: 30)
+                    }//.fontWidth(.condensed)
+                        .foregroundStyle(.black)
+                        .chartPlotStyle {
+                            $0.frame(width: 700, height: 500)
+                        }
                         .chartLegend(showLegend ? .visible : .hidden)
+                        .chartLegend(position: .trailing, alignment: .leading, spacing: 30) { () in
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Set(aggregatedSelectedData.lazy.map(\.algorithm)).sorted(),
+                                        id: \.self) { (algorithm: String) -> HStack in
+                                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                        ZStack(alignment: .center) {
+                                            Path {
+                                                $0.move(to: .init(x: 0, y: lineWidth / 2))
+                                                $0.addLine(to: CGPoint(x: swatchWidth, y: lineWidth / 2))
+                                            }
+                                                .stroke(style: algorithmStrokeStyle[algorithm] ?? .init(lineWidth: lineWidth))
+                                                .frame(width: swatchWidth, height: lineWidth)
+                                                .foregroundColor(algorithmColour[algorithm] ?? .black)
+
+                                            (algorithmSymbol[algorithm] ?? .pentagon)
+                                                .foregroundColor(algorithmColour[algorithm] ?? .black)
+                                                .frame(width: lineWidth * 2.6666666666, height: lineWidth * 2.666666666)
+                                        }.alignmentGuide(VerticalAlignment.firstTextBaseline) { _ in
+                                            8
+                                        }
+
+                                        Text(algorithm)
+                                            .foregroundColor(Color(nsColor: .darkGray))
+                                            .font(.body.width(.condensed))
+                                            .truncationMode(.middle)
+                                            .allowsTightening(false)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                }
+                            }.frame(maxWidth: legendWidth)
+                        }
                         .chartForegroundStyleScale { // This is required for the legend to be drawn.
                             algorithmColour[$0] ?? .black
                         }
@@ -528,7 +585,13 @@ struct ContentView: View {
                         }
                         .padding()
                         .padding(.leading, 20)),
-                fileTitle)
+                (fileTitle
+                 + (normaliseByInputByteLength
+                    ? " [normalised by input byte length]"
+                    : "")
+                 + (showLegend
+                    ? ""
+                    : ", sans legend")))
         } else {
             let nonEmptyStringData = data.lazy.filter { emptyStringInput != $0.input && restrictedXDomainRange.contains($0.inputLengthInBytes) }.map { normaliseByInputByteLength ? $0.duration / $0.inputLengthInBytes : $0.duration }
             let yRange = (false // i.e. whether to use the Y range naively as-is, or expand it outwards to even multiples of 10 (which helps neaten up the display when using a log Y axis).
@@ -566,9 +629,9 @@ struct ContentView: View {
 //                            .symbolSize(min(4, lineWidth)) // Symbols don't show up at all if this is used! 😤
 //                            .symbolSize(by: .value("Algorithm", $0.algorithm))
                         }
-                        $0.frame(maxWidth: 600, maxHeight: 500)
                     }.fontWidth(.condensed)
                     .chartPlotStyle {
+                        $0.frame(width: 700, height: 500)
                     }
                     .chartLegend(showLegend ? .visible : .hidden)
                     .chartLegend(position: .trailing, alignment: .leading, spacing: 30) /*{
@@ -642,7 +705,18 @@ struct ContentView: View {
                     }
                     .padding()
                     .padding(.leading, 20)),
-                fileTitle)
+                (fileTitle
+                 + (normaliseByInputByteLength
+                    ? " [normalised by input byte length]"
+                    : "")
+                 + (restrictedXDomain != xDomain
+                    ? (1 < restrictedXDomain.count
+                       ? ", input lengths \((restrictedXDomain.first ?? 0).formatted(.byteCount(style: .decimal)))…\((restrictedXDomain.last ?? 0).formatted(.byteCount(style: .decimal)))"
+                       : ", input length \((restrictedXDomain.first ?? 0).formatted(.byteCount(style: .decimal)))")
+                    : "")
+                 + (showLegend
+                    ? ""
+                    : ", sans legend")))
         }
     }
 }
