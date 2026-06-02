@@ -91,6 +91,8 @@ struct ContentView: View {
     @State var normaliseByInputByteLength = false
     @State var showASCIIInputsInComparisonChart = false
 
+    @State var showLegend = true
+
     static func inputOrderIndex(_ input: String) -> Int? {
         for (i, prefix) in inputOrder.enumerated() {
             if input.hasPrefix(prefix) {
@@ -254,6 +256,11 @@ struct ContentView: View {
             }.padding()
 
             HStack {
+                Toggle("Show legend",
+                       isOn: Binding(get: { showLegend && emptyStringInput != selectedInput },
+                                     set: { showLegend = $0 }))
+                    .disabled(emptyStringInput == selectedInput)
+
                 Toggle("Normalise by input byte length",
                        isOn: Binding(get: { comparisonAcrossInputsInput == selectedInput || (emptyStringInput != selectedInput && normaliseByInputByteLength) },
                                      set: { normaliseByInputByteLength = $0 }))
@@ -433,6 +440,7 @@ struct ContentView: View {
                         $0.frame(maxWidth: 600, maxHeight: 500)
                     }
                         .chartLegend(position: .trailing, alignment: .leading, spacing: 30)
+                        .chartLegend(showLegend ? .visible : .hidden)
                         .chartForegroundStyleScale { // This is required for the legend to be drawn.
                             algorithmColour[$0] ?? .black
                         }
@@ -513,6 +521,7 @@ struct ContentView: View {
                     }.chartPlotStyle {
                         $0.frame(maxWidth: 600, maxHeight: 500)
                     }
+                    .chartLegend(showLegend ? .visible : .hidden)
                     .chartLegend(position: .trailing, alignment: .leading, spacing: 30) /*{
                         VStack() {
                             let algorithms = Set(selectedData.map(\.algorithm)).sorted()
