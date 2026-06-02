@@ -91,6 +91,7 @@ struct ContentView: View {
     @State var normaliseByInputByteLength = false
     @State var showASCIIInputsInComparisonChart = false
 
+    @State var yAxisLabelPadding: CGFloat = 0
     @State var showLegend = true
 
     static func inputOrderIndex(_ input: String) -> Int? {
@@ -270,6 +271,17 @@ struct ContentView: View {
                     .disabled(comparisonAcrossInputsInput != selectedInput)
                     .opacity(comparisonAcrossInputsInput == selectedInput ? 1 : 0)
                     .padding(.leading)
+
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("Y axis label padding:")
+
+                    VStack {
+                        Slider(value: $yAxisLabelPadding, in: -20...20, step: 1)
+                            .frame(maxWidth: 200)
+                            .padding(.leading)
+                        Text("\(yAxisLabelPadding.formatted())").font(.caption)
+                    }
+                }
             }
 
             VStack(alignment: .leading) {
@@ -467,7 +479,7 @@ struct ContentView: View {
                         .chartYAxisLabel("Runtime per input byte",
                                          position: .trailing,
                                          alignment: .center,
-                                         spacing: normaliseByInputByteLength ? 0 : -10) // Spacing hack to make the non-normalised version look aesthetically correct, with the results on an M2 MacBook Air.  May be wrong for any other numbers (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
+                                         spacing: yAxisLabelPadding)
                         .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
                             let result = if let subtitle {
                                 Text("""
@@ -578,7 +590,7 @@ struct ContentView: View {
                     .chartYAxisLabel(normaliseByInputByteLength ? "Runtime per input byte" : "Runtime",
                                      position: .trailing,
                                      alignment: .center,
-                                     spacing: 10) // -10) // -10 is a spacing hack to make the layout look decent for charts showing the full dataset, with the results on an M2 MacBook Air.  May be wrong for any other benchmark results (typically depends on the worst-case performance, as that determines the width of the Y axis labels bounding box).
+                                     spacing: yAxisLabelPadding)
                     .chartXAxisLabel(position: .top, alignment: .center, spacing: 10) {
                         if let title {
                             if let subtitle {
