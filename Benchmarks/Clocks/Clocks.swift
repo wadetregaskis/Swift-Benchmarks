@@ -2,7 +2,7 @@ import Benchmark
 import Darwin
 import Foundation
 
-let benchmarks = {
+let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
                                                      .wallClock,
                                                      .mallocCountTotal,

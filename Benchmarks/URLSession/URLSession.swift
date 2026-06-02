@@ -5,7 +5,7 @@ import Gen
 
 let testFileSize = 128 * 1024 * 1024 // 128 MiB
 
-let benchmarks = {
+let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
                                                      .wallClock,
                                                      .peakMemoryResident,
@@ -504,7 +504,7 @@ let benchmarks = {
     }
 }
 
-class IncrementalDataDelegate: NSObject, URLSessionDataDelegate {
+final class IncrementalDataDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private let task: URLSessionTask
     private let handler: (Data) -> ()
     private let done = NSCondition()

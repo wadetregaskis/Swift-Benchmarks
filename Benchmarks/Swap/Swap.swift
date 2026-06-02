@@ -2,7 +2,7 @@ import Benchmark
 import BigInt
 import NBKFlexibleWidthKit
 
-let benchmarks = {
+let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
                                                      .wallClock,
                                                      .mallocCountTotal,

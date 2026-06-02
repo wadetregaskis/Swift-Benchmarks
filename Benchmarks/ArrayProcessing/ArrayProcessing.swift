@@ -35,7 +35,7 @@ struct Datas {
     }
 }
 
-let benchmarks = {
+let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration = .init(metrics: [.cpuTotal,
                                                      .wallClock,
                                                      .mallocCountTotal,

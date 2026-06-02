@@ -14,7 +14,7 @@ let stringWithManyMatchesASCII = "[Mal]\0-\0Remember:/if/anything:happens/to:me,
 let validateResults = false // Off by default because it impacts performance.  Ignore the output measurements when this is enabled.
 let printInputs = false // Off by default because also it's nice to have it in the output as a record of what exactly was tested, I can't figure out how to have it output only once, rather than a bajillion times. 😕
 
-let benchmarks = {
+let benchmarks: @Sendable () -> Void = {
     Benchmark.defaultConfiguration = .init(metrics: validateResults ? [] : [.wallClock,
                                                                             .mallocCountTotal,
                                                                             .peakMemoryResident,
