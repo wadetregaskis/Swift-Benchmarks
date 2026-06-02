@@ -70,7 +70,7 @@ struct ContentView: View {
                                                                         (/firstIndex\(where:\)/, .triangle),
                                                                         (/map & join/, .asterisk)]
 
-    let algorithmKeyphraseToStrokeStyle: [(Regex, StrokeStyle)] = [(/\ \(Dictionary of replacements instead of Array\)/, .init(lineWidth: lineWidth, dash: [3.2, 3.2]))]
+    let algorithmKeyphraseToStrokeStyle: [(Regex, StrokeStyle)] = [(/\ \(Dictionary of replacements instead of Array\)/, .init(lineWidth: lineWidth, dash: [lineWidth, lineWidth]))]
 
     let colourPalette: [Color] = [(221, 221, 221),
                                   (46, 37, 133),
