@@ -266,6 +266,7 @@ struct ContentView: View {
                        isOn: Binding(get: { comparisonAcrossInputsInput == selectedInput || (emptyStringInput != selectedInput && normaliseByInputByteLength) },
                                      set: { normaliseByInputByteLength = $0 }))
                     .disabled(emptyStringInput == selectedInput || comparisonAcrossInputsInput == selectedInput)
+                    .padding(.leading)
 
                 Toggle("ASCII inputs", isOn: $showASCIIInputsInComparisonChart)
                     .disabled(comparisonAcrossInputsInput != selectedInput)
