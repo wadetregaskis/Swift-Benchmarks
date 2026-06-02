@@ -485,6 +485,18 @@ struct ContentView: View {
                             algorithmStrokeStyle[$0] ?? .init(lineWidth: lineWidth)
                         }
                         .chartYScale(type: .log)
+//                        .chartXAxis {
+//                            AxisMarks(preset: .aligned) {
+//                                if let value = $0.as(String.self) {
+//                                    AxisValueLabel(value, centered: true)
+//                                } else {
+//                                    let _ = print("X axis (input) value is not a string.")
+//                                }
+//
+//                                AxisTick()
+//                                AxisGridLine()
+//                            }
+//                        }
                         .chartYAxis {
                             AxisMarks {
                                 if let value = $0.as(Double.self) {
