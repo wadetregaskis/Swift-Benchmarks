@@ -8,4 +8,4 @@ This is essentially just a place to publish benchmark code.  The benchmarks are 
 
 `swift package benchmark`
 
-See [the documentation](https://swiftpackageindex.com/ordo-one/package-benchmark/1.11.2/documentation/benchmark/runningbenchmarks) for the [Benchmark](https://github.com/ordo-one/package-benchmark) package for details.
+See [the documentation](https://swiftpackageindex.com/ordo-one/benchmark/main/documentation/benchmark) for the [Benchmark](https://github.com/ordo-one/benchmark) package for details.
