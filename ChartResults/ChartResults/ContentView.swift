@@ -56,9 +56,427 @@ let inputOrder = [
     "Only "
 ]
 
+// MARK: - Shared styling
+
+let colourPalette: [Color] = [(221, 221, 221),
+                              (46, 37, 133),
+                              (51, 117, 56),
+                              (93, 168, 153),
+                              (148, 203, 236),
+                              (220, 205, 125),
+                              (194, 106, 119),
+                              (159, 74, 150),
+                              (126, 41, 84)].map { Color(.displayP3, red: $0.0 / 255, green: $0.1 / 255, blue: $0.2 / 255) }
+
+let symbolPalette: [BasicChartSymbolShape] = [.circle, .square, .triangle, .diamond, .cross, .pentagon, .plus, .asterisk]
+
+/// Renders a chart image to a temporary file and bundles it (plus the raw image) into an `NSItemProvider`, so a chart can be
+/// dragged out of the app as a file or pasted as an image.
+func chartDragProvider(title: String, image: NSImage?) -> NSItemProvider {
+    let provider = NSItemProvider()
+    let name = title.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+    provider.suggestedName = name
+
+    guard let image else {
+        print("Unable to render chart as an NSImage.")
+        return provider
+    }
+
+    if let folder = try? FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: .temporaryDirectory, create: true),
+       let tiff = image.tiffRepresentation(using: .lzw, factor: 1) {
+        let url = folder.appending(path: (name.isEmpty ? "Chart" : name) + ".tiff", directoryHint: .notDirectory)
+        try? tiff.write(to: url, options: .withoutOverwriting)
+        provider.registerObject(url as NSURL, visibility: .all)
+    }
+
+    provider.registerObject(image, visibility: .all)
+    return provider
+}
+
+// MARK: - Router
+
+/// Imports a TSV and routes to the right renderer.  A file with a header row (first line entirely non-numeric) is treated as a
+/// general, self-describing dataset; a headerless file is the legacy StringReplacement seven-column format.
 struct ContentView: View {
+    @State private var showFileImporter = true
+    @State private var legacyRecords: [Record]? = nil
+    @State private var genericDataset: GenericDataset? = nil
+    @State private var errorMessage: String? = nil
+
+    var body: some View {
+        VStack {
+            HStack {
+                Button("Import data…") { showFileImporter = true }
+
+                if let errorMessage {
+                    Text(errorMessage).foregroundStyle(.red)
+                }
+            }
+            .padding(.top)
+
+            if let genericDataset {
+                GenericChartView(dataset: genericDataset)
+            } else if let legacyRecords {
+                StringReplacementView(records: legacyRecords)
+            } else {
+                Spacer()
+                Text("Import a benchmark results TSV to begin.").foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.tabSeparatedText, .plainText, .text]) { result in
+            guard let url = try? result.get() else { return }
+            load(url)
+        }
+    }
+
+    private func load(_ url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+            errorMessage = "Couldn't read \(url.lastPathComponent)."
+            return
+        }
+
+        let lines = content.split(whereSeparator: \.isNewline)
+        guard let firstLine = lines.first else {
+            errorMessage = "\(url.lastPathComponent) is empty."
+            return
+        }
+
+        let firstCells = firstLine.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+        let hasHeader = !firstCells.isEmpty && firstCells.allSatisfy { Double($0) == nil }
+
+        errorMessage = nil
+
+        if hasHeader, let dataset = GenericDataset(lines: Array(lines)) {
+            genericDataset = dataset
+            legacyRecords = nil
+        } else {
+            genericDataset = nil
+            legacyRecords = Self.parseLegacy(Array(lines))
+        }
+    }
+
+    static func parseLegacy(_ lines: [Substring]) -> [Record] {
+        let parseStrategy = IntegerParseStrategy(format: IntegerFormatStyle<Int>.number, lenient: true)
+        var records: [Record] = []
+
+        for (i, line) in lines.enumerated() {
+            let cells = line.split(separator: "\t").map(String.init)
+
+            guard cells.count == 7 else {
+                fatalError("Encountered a line in the input that does not have the expected number of cells - should be seven, but it has \(cells.count): \(line)")
+            }
+
+            records.append(Record(id: i,
+                                  input: cells[0],
+                                  inputLengthInCharacters: (try? Int(cells[1], strategy: parseStrategy)) ?? 0,
+                                  inputLengthInBytes: (try? Int(cells[2], strategy: parseStrategy)) ?? 0,
+                                  replacementEffect: cells[3],
+                                  algorithm: cells[4],
+                                  duration: (try? Int(cells[6], strategy: parseStrategy)) ?? 0))
+        }
+
+        return records
+    }
+}
+
+// MARK: - Generic, schema-driven dataset
+
+/// A self-describing tabular dataset parsed from a headed TSV.  Columns whose every value parses as a number are "numeric";
+/// the rest are categorical.  One numeric column is singled out as the *measure* (what's plotted on the Y axis).
+struct GenericDataset {
+    let columns: [String]
+    let rows: [[String: String]]
+    let numericColumns: Set<String>
+    let measureColumn: String
+
+    init?(lines: [Substring]) {
+        guard let header = lines.first else { return nil }
+
+        let columns = header.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+        guard columns.count >= 2 else { return nil }
+
+        var rows: [[String: String]] = []
+
+        for line in lines.dropFirst() {
+            let cells = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard cells.count == columns.count else { continue }
+            rows.append(Dictionary(uniqueKeysWithValues: zip(columns, cells)))
+        }
+
+        guard !rows.isEmpty else { return nil }
+
+        let numeric = Set(columns.filter { column in
+            let values = rows.compactMap { $0[column] }.filter { !$0.isEmpty }
+            return !values.isEmpty && values.allSatisfy { Double($0) != nil }
+        })
+
+        // Prefer a duration-ish numeric column as the measure; otherwise just the last numeric column.
+        let measureKeywords = ["nanosecond", "microsecond", "millisecond", "second", "duration", "time", "wallclock", "latency"]
+        self.measureColumn = columns.last { numeric.contains($0) && measureKeywords.contains(where: $0.lowercased().contains) }
+            ?? columns.last { numeric.contains($0) }
+            ?? columns.last!
+        self.columns = columns
+        self.rows = rows
+        self.numericColumns = numeric
+    }
+
+    func distinctValues(_ column: String) -> [String] {
+        let values = Set(rows.compactMap { $0[column] })
+
+        if numericColumns.contains(column) {
+            return values.sorted { (Double($0) ?? 0) < (Double($1) ?? 0) }
+        }
+
+        return values.sorted()
+    }
+}
+
+// MARK: - Generic, schema-driven chart
+
+/// One line chart of measure-vs-X, one line per series value, with a picker for the X axis (any numeric column), a picker for
+/// the series (any categorical column), and a slicer picker for every other column.  This is what renders the StringBuilding
+/// benchmark, and any future headed dataset.
+struct GenericChartView: View {
+    let dataset: GenericDataset
+
+    @State private var xColumn = ""
+    @State private var seriesColumn = ""
+    @State private var normaliseColumn: String? = nil
+    @State private var slicerSelections: [String: String] = [:]
+    @State private var seriesEnabled: [String: Bool] = [:]
+    @State private var seriesColour: [String: Color] = [:]
+    @State private var seriesSymbol: [String: BasicChartSymbolShape] = [:]
+    @State private var showLegend = true
+    @State private var logX = true
+    @State private var logY = true
+    @State private var didSetup = false
+
+    @Environment(\.displayScale) private var displayScale
+
+    private var xCandidates: [String] { dataset.columns.filter { dataset.numericColumns.contains($0) && $0 != dataset.measureColumn } }
+    private var categoricalColumns: [String] { dataset.columns.filter { !dataset.numericColumns.contains($0) } }
+    private var slicerColumns: [String] { dataset.columns.filter { $0 != xColumn && $0 != seriesColumn && $0 != dataset.measureColumn } }
+
+    private func numeric(_ row: [String: String], _ column: String) -> Double? {
+        row[column].flatMap(Double.init)
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            controls
+
+            ScrollView {
+                VStack(alignment: .leading) {
+                    ForEach(dataset.distinctValues(seriesColumn), id: \.self) { value in
+                        Toggle(value, isOn: Binding(get: { seriesEnabled[value] ?? true },
+                                                    set: { seriesEnabled[value] = $0 }))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 140)
+            .padding(.horizontal)
+
+            chart
+        }
+        .onAppear(perform: setup)
+
+        Spacer(minLength: 0)
+    }
+
+    private var controls: some View {
+        VStack {
+            HStack {
+                Picker("X axis", selection: $xColumn) {
+                    ForEach(xCandidates, id: \.self) { Text($0).tag($0) }
+                }.fixedSize()
+
+                Picker("Series", selection: $seriesColumn) {
+                    ForEach(categoricalColumns, id: \.self) { Text($0).tag($0) }
+                }.fixedSize()
+
+                Picker("Normalise by", selection: $normaliseColumn) {
+                    Text("None").tag(String?.none)
+                    ForEach(xCandidates, id: \.self) { Text($0).tag(String?.some($0)) }
+                }.fixedSize()
+
+                Toggle("Legend", isOn: $showLegend)
+                Toggle("log X", isOn: $logX)
+                Toggle("log Y", isOn: $logY)
+            }
+            .onChange(of: seriesColumn) { _, _ in
+                seriesEnabled.removeAll()
+                assignSeriesStyles()
+                refreshSlicers()
+            }
+            .onChange(of: xColumn) { _, _ in refreshSlicers() }
+
+            ScrollView(.horizontal) {
+                HStack {
+                    ForEach(slicerColumns, id: \.self) { column in
+                        Picker(column, selection: Binding(get: { slicerSelections[column] ?? dataset.distinctValues(column).first ?? "" },
+                                                          set: { slicerSelections[column] = $0 })) {
+                            ForEach(dataset.distinctValues(column), id: \.self) { value in
+                                Text(displayValue(value, column)).tag(value)
+                            }
+                        }.fixedSize()
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var chart: some View {
+        let rows = filteredRows
+
+        return chartCore(rows)
+            .frame(width: 700, height: 500)
+            .padding()
+            .onDrag {
+                let renderer = ImageRenderer(content: chartCore(rows).frame(width: 700, height: 500).padding())
+                renderer.isOpaque = false
+                renderer.scale = displayScale
+                renderer.colorMode = .extendedLinear
+                return chartDragProvider(title: chartTitle, image: renderer.nsImage)
+            }
+    }
+
+    private func chartCore(_ rows: [[String: String]]) -> some View {
+        let xs = rows.compactMap { numeric($0, xColumn) }
+        let ys = rows.map(yValue)
+        let useLogX = logX && (xs.min() ?? 0) > 0
+        let useLogY = logY && (ys.min() ?? 0) > 0
+
+        return Chart {
+            ForEach(rows.indices, id: \.self) { index in
+                let row = rows[index]
+                let series = row[seriesColumn] ?? ""
+
+                LineMark(x: .value(xColumn, numeric(row, xColumn) ?? 0),
+                         y: .value(yAxisLabel, yValue(row)),
+                         series: .value(seriesColumn, series))
+                .foregroundStyle(by: .value(seriesColumn, series))
+                .symbol(by: .value(seriesColumn, series))
+            }
+        }
+        .chartForegroundStyleScale { seriesColour[$0] ?? .gray }
+        .chartSymbolScale { seriesSymbol[$0] ?? BasicChartSymbolShape.circle }
+        .chartXScale(domain: .automatic, type: useLogX ? .log : .linear)
+        .chartYScale(domain: .automatic, type: useLogY ? .log : .linear)
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                if let v = value.as(Double.self) { AxisValueLabel(formatX(v)) }
+                AxisTick()
+                AxisGridLine()
+            }
+        }
+        .chartYAxis {
+            AxisMarks { value in
+                if let v = value.as(Double.self) { AxisValueLabel(formatMeasure(v)) }
+                AxisTick()
+                AxisGridLine()
+            }
+        }
+        .chartXAxisLabel(xColumn, alignment: .center)
+        .chartYAxisLabel(yAxisLabel, position: .trailing, alignment: .center)
+        .chartLegend(showLegend ? .visible : .hidden)
+        .chartLegend(position: .trailing, alignment: .top, spacing: 16)
+    }
+
+    private var filteredRows: [[String: String]] {
+        dataset.rows
+            .filter { row in
+                (seriesEnabled[row[seriesColumn] ?? ""] ?? true)
+                && slicerColumns.allSatisfy { row[$0] == (slicerSelections[$0] ?? dataset.distinctValues($0).first) }
+            }
+            .sorted { (numeric($0, xColumn) ?? 0) < (numeric($1, xColumn) ?? 0) }
+    }
+
+    private func yValue(_ row: [String: String]) -> Double {
+        let measure = numeric(row, dataset.measureColumn) ?? 0
+
+        if let normaliseColumn, let denominator = numeric(row, normaliseColumn), denominator != 0 {
+            return measure / denominator
+        }
+
+        return measure
+    }
+
+    private var yAxisLabel: String {
+        if let normaliseColumn { return "\(dataset.measureColumn) / \(normaliseColumn)" }
+        return dataset.measureColumn
+    }
+
+    private var chartTitle: String {
+        slicerColumns
+            .map { "\($0)=\(slicerSelections[$0] ?? dataset.distinctValues($0).first ?? "")" }
+            .joined(separator: ", ")
+    }
+
+    private var measureIsDuration: Bool { dataset.measureColumn.lowercased().contains("nanosecond") }
+
+    private func formatMeasure(_ value: Double) -> String {
+        if measureIsDuration && normaliseColumn == nil {
+            return Measurement(value: value, unit: UnitDuration.nanoseconds).simplified.formatted(.measurement(width: .abbreviated))
+        }
+
+        return value.formatted(.number.precision(.significantDigits(1...3)))
+    }
+
+    private func formatX(_ value: Double) -> String {
+        if xColumn.lowercased().contains("byte") { return Int(value).formatted(.byteCount(style: .binary)) }
+        return value.formatted(.number)
+    }
+
+    private func displayValue(_ value: String, _ column: String) -> String {
+        if dataset.numericColumns.contains(column), let number = Double(value), column.lowercased().contains("byte") {
+            return Int(number).formatted(.byteCount(style: .binary))
+        }
+
+        return value
+    }
+
+    private func setup() {
+        guard !didSetup else { return }
+        didSetup = true
+
+        xColumn = xCandidates.first ?? dataset.columns.first ?? ""
+        seriesColumn = categoricalColumns.first { $0.lowercased() == "algorithm" } ?? categoricalColumns.last ?? dataset.columns.first ?? ""
+
+        assignSeriesStyles()
+        refreshSlicers()
+    }
+
+    private func assignSeriesStyles() {
+        for (i, value) in dataset.distinctValues(seriesColumn).enumerated() {
+            seriesColour[value] = colourPalette[(i + 1) % colourPalette.count] // +1 so the first series isn't the pale swatch.
+            seriesSymbol[value] = symbolPalette[i % symbolPalette.count]
+        }
+    }
+
+    private func refreshSlicers() {
+        for column in slicerColumns where slicerSelections[column] == nil {
+            slicerSelections[column] = defaultSlicerValue(column)
+        }
+    }
+
+    /// The most common value in a column — a far better default slice than the minimum, since it lands on whichever value the
+    /// bulk of the data shares (e.g. the main matrix's output size rather than a sparse scaling-sweep size).
+    private func defaultSlicerValue(_ column: String) -> String {
+        let counts = Dictionary(grouping: dataset.rows.compactMap { $0[column] }, by: { $0 }).mapValues(\.count)
+        return counts.max { $0.value < $1.value }?.key ?? dataset.distinctValues(column).first ?? ""
+    }
+}
+
+struct StringReplacementView: View {
+    let records: [Record]
+
     @State var data: [Record] = []
-    @State var showFileImporter = true
     @State var algorithmEnabled: [String: Bool] = [:]
     @State var algorithmColour: [String: Color] = [:]
     @State var algorithmSymbol: [String: BasicChartSymbolShape] = [:]
@@ -71,16 +489,6 @@ struct ContentView: View {
                                                                         (/map & join/, .asterisk)]
 
     let algorithmKeyphraseToStrokeStyle: [(Regex, StrokeStyle)] = [(/\ \(Dictionary of replacements instead of Array\)/, .init(lineWidth: lineWidth, dash: [lineWidth, lineWidth]))]
-
-    let colourPalette: [Color] = [(221, 221, 221),
-                                  (46, 37, 133),
-                                  (51, 117, 56),
-                                  (93, 168, 153),
-                                  (148, 203, 236),
-                                  (220, 205, 125),
-                                  (194, 106, 119),
-                                  (159, 74, 150),
-                                  (126, 41, 84)].map { Color(.displayP3, red: $0.0 / 255, green: $0.1 / 255, blue: $0.2 / 255) }
 
     @State var selectedInput: String? = nil
     @State var selectedReplacementEffect: String? = nil
@@ -165,52 +573,6 @@ struct ContentView: View {
             let xDomain = Set(preSelectedData.lazy.map(\.inputLengthInBytes)).sorted()
 
             HStack {
-                Button("Import data…") {
-                    showFileImporter = true
-                }.fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.tabSeparatedText]) { result in
-                    if let url = try? result.get() {
-                        var newData = Array<Record>()
-                        let parseStrategy = IntegerParseStrategy(format: IntegerFormatStyle<Int>.number, lenient: true)
-
-                        for (i, line) in try! String(contentsOf: url, encoding: .utf8).lazy.split(whereSeparator: \.isNewline).enumerated() {
-                            let cells = line.split(separator: "\t").map(String.init)
-
-                            guard 7 == cells.count else {
-                                fatalError("Encountered a line in the input that does not have the expected number of cells - should be seven, but it has \(cells.count): \(line)")
-                            }
-
-                            newData.append(Record(id: i,
-                                                  input: cells[0],
-                                                  inputLengthInCharacters: (try? Int(cells[1], strategy: parseStrategy)) ?? 0,
-                                                  inputLengthInBytes: (try? Int(cells[2], strategy: parseStrategy)) ?? 0,
-                                                  replacementEffect: cells[3],
-                                                  algorithm: cells[4],
-                                                  duration: try! Int(cells[6], strategy: parseStrategy)))
-                        }
-
-                        data = newData
-
-                        var colourIndex = 0
-
-                        for algorithm in Set(data.lazy.map(\.algorithm)).sorted() {
-                            algorithmSymbol[algorithm] = algorithmKeyphraseToSymbol.first { algorithm.contains($0.0) }?.1
-
-                            let strokeStyleMatch = algorithmKeyphraseToStrokeStyle.first { algorithm.contains($0.0) }
-                            algorithmStrokeStyle[algorithm] = strokeStyleMatch?.1
-
-                            if let strokeStyleMatch, let baseColour = algorithmColour[algorithm.replacing(strokeStyleMatch.0, with: "")] {
-                                algorithmColour[algorithm] = baseColour
-                            } else {
-                                algorithmColour[algorithm] = colourPalette[colourIndex % colourPalette.count]
-                                colourIndex += 1
-                            }
-                        }
-
-                        selectedInput = data.first?.input
-                        selectedReplacementEffect = data.first?.replacementEffect
-                    }
-                }
-
                 let applicableReplacementEffects = Set(data.lazy
                     .filter {
                         $0.input == selectedInput
@@ -387,8 +749,34 @@ struct ContentView: View {
                     }
                 }
         }
+        .onAppear(perform: load)
 
         Spacer(minLength: 0)
+    }
+
+    func load() {
+        guard data.isEmpty else { return }
+
+        data = records
+
+        var colourIndex = 0
+
+        for algorithm in Set(data.lazy.map(\.algorithm)).sorted() {
+            algorithmSymbol[algorithm] = algorithmKeyphraseToSymbol.first { algorithm.contains($0.0) }?.1
+
+            let strokeStyleMatch = algorithmKeyphraseToStrokeStyle.first { algorithm.contains($0.0) }
+            algorithmStrokeStyle[algorithm] = strokeStyleMatch?.1
+
+            if let strokeStyleMatch, let baseColour = algorithmColour[algorithm.replacing(strokeStyleMatch.0, with: "")] {
+                algorithmColour[algorithm] = baseColour
+            } else {
+                algorithmColour[algorithm] = colourPalette[colourIndex % colourPalette.count]
+                colourIndex += 1
+            }
+        }
+
+        selectedInput = data.first?.input
+        selectedReplacementEffect = data.first?.replacementEffect
     }
 
     func chart(preSelectedData: [Record], xDomain: [Int]) -> (AnyView, String) {
