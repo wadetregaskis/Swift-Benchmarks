@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "Swift Benchmarks",
     platforms: [
-        .macOS(.v13),
+        .macOS(.v15),
     ],
     dependencies: [
         .package(url: "https://github.com/attaswift/BigInt.git", .upToNextMajor(from: "5.3.0")),
