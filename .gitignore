@@ -3,6 +3,7 @@
 /Packages
 Package.resolved
 xcuserdata/
+*.xcscheme
 DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
