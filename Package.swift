@@ -44,7 +44,20 @@ let package = Package(
             ],
             path: "Benchmarks/StringReplacement",
             exclude: [
-                "ChartResults",
+                "Output data munging commands.md",
+            ],
+            plugins: [
+                .plugin(name: "BenchmarkPlugin", package: "benchmark")
+            ]
+        ),
+        .executableTarget(
+            name: "StringBuilding",
+            dependencies: [
+                .product(name: "Benchmark", package: "benchmark"),
+                .product(name: "Gen", package: "swift-gen"),
+            ],
+            path: "Benchmarks/StringBuilding",
+            exclude: [
                 "Output data munging commands.md",
             ],
             plugins: [
