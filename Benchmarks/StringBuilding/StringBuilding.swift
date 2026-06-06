@@ -885,12 +885,11 @@ nonisolated(unsafe) let benchmarks = {
 
     for charset in quick ? [Charset.ascii, .cjk] : Charset.allCases {
         for mean in quick ? [1, 100] : [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1_024] {
-//            for variancePercent in quick ? [0, 100] : [0, 50, 100] {
-//                // At a one-byte mean the variance can't do anything (a chunk is always at least one character), so skip the dupes.
-//                if mean == 1 && variancePercent != 0 {
-//                    continue
-//                }
-            let variancePercent = 0
+            for variancePercent in [0] { // quick ? [0, 100] : [0, 50, 100] { // I'm not sure how valuable this is.
+                // At a one-byte mean the variance can't do anything (a chunk is always at least one character), so skip the dupes.
+                if mean == 1 && variancePercent != 0 {
+                    continue
+                }
 
                 for outputBytes in [64, 256, 1024, 4_096, 16_384, 65_536, 262_144, 1_048_576] {
                     if mean <= outputBytes {
@@ -901,7 +900,7 @@ nonisolated(unsafe) let benchmarks = {
                                  algorithms: algorithms)
                     }
                 }
-//            }
+            }
         }
     }
 }
