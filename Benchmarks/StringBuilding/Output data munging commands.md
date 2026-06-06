@@ -6,7 +6,7 @@ The header row matters: the `ChartResults` app uses its presence to switch into 
 
 ```bash
 swift package benchmark --target StringBuilding --no-progress | awk '
-  BEGIN { print "source\tcharset\tmeanBytes\tvarianceBytes\toutputBytes\talgorithm\twallClockNanoseconds" }
+  BEGIN { print "source\tcharset\tmeanBytes\tvarianceBytes\toutputBytes\treserve\talgorithm\twallClockNanoseconds" }
   /^\[src=/ {
     line = $0; rb = index(line, "]")
     params = substr(line, 2, rb - 2); algo = substr(line, rb + 2)
@@ -19,6 +19,7 @@ swift package benchmark --target StringBuilding --no-progress | awk '
       else if (key == "mean") mean = value
       else if (key == "var")  vari = value
       else if (key == "out")  out  = value
+      else if (key == "reserve") reserve = value
     }
   }
   /Time \(wall clock\)/ {
@@ -28,7 +29,7 @@ swift package benchmark --target StringBuilding --no-progress | awk '
     else if (index($0, "(s)"))  unit = "s"
     split($0, cols, "│"); p50 = cols[5]; gsub(/[^0-9]/, "", p50)
     mult = (unit == "s") ? 1000000000 : (unit == "ms") ? 1000000 : (unit == "us") ? 1000 : 1
-    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", src, set, mean, vari, out, algo, (p50 * mult)
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" src, set, mean, vari, out, reserve, algo, (p50 * mult)
   }' > stringbuilding.tsv
 ```
 
