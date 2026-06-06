@@ -442,13 +442,13 @@ struct GenericChartView: View {
     }
 
     private func formatX(_ value: Double) -> String {
-        if xColumn.lowercased().contains("byte") { return Int(value).formatted(.byteCount(style: .binary)) }
+        if xColumn.lowercased().contains("byte") { return Int(value).formatted(.byteCount(style: .binary, spellsOutZero: false)) }
         return value.formatted(.number)
     }
 
     private func displayValue(_ value: String, _ column: String) -> String {
         if dataset.numericColumns.contains(column), let number = Double(value), column.lowercased().contains("byte") {
-            return Int(number).formatted(.byteCount(style: .binary))
+            return Int(number).formatted(.byteCount(style: .binary, spellsOutZero: false)) // Otherwise 0 renders as "Zero kB".
         }
 
         return value
