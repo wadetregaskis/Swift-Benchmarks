@@ -193,6 +193,10 @@ struct GenericDataset {
     let numericColumns: Set<String>
     let measureColumn: String
 
+    /// Distinct, sorted values for every column, computed once at import.  Recomputing these on demand was O(rows) per call and
+    /// was being called inside a per-row filter loop — i.e. O(rows²) per render, which made the chart unusably slow.
+    let distinctValuesByColumn: [String: [String]]
+
     init?(lines: [Substring]) {
         guard let header = lines.first else { return nil }
 
@@ -222,16 +226,18 @@ struct GenericDataset {
         self.columns = columns
         self.rows = rows
         self.numericColumns = numeric
+
+        self.distinctValuesByColumn = Dictionary(uniqueKeysWithValues: columns.map { column in
+            let values = Set(rows.compactMap { $0[column] })
+            let sorted = numeric.contains(column)
+                ? values.sorted { (Double($0) ?? 0) < (Double($1) ?? 0) }
+                : values.sorted()
+            return (column, sorted)
+        })
     }
 
     func distinctValues(_ column: String) -> [String] {
-        let values = Set(rows.compactMap { $0[column] })
-
-        if numericColumns.contains(column) {
-            return values.sorted { (Double($0) ?? 0) < (Double($1) ?? 0) }
-        }
-
-        return values.sorted()
+        distinctValuesByColumn[column] ?? []
     }
 }
 
@@ -389,12 +395,19 @@ struct GenericChartView: View {
     }
 
     private var filteredRows: [[String: String]] {
-        dataset.rows
+        // Resolve everything that doesn't depend on the row ONCE, so the per-row predicate is just dictionary lookups
+        // (`slicerColumns` is a computed property and `distinctValues` was the O(rows) call that made this O(rows²)).
+        let series = seriesColumn
+        let x = xColumn
+        let columns = slicerColumns
+        let selections = Dictionary(uniqueKeysWithValues: columns.map { ($0, slicerSelections[$0] ?? dataset.distinctValues($0).first ?? "") })
+
+        return dataset.rows
             .filter { row in
-                (seriesEnabled[row[seriesColumn] ?? ""] ?? true)
-                && slicerColumns.allSatisfy { row[$0] == (slicerSelections[$0] ?? dataset.distinctValues($0).first) }
+                (seriesEnabled[row[series] ?? ""] ?? true)
+                && columns.allSatisfy { row[$0] == selections[$0] }
             }
-            .sorted { (numeric($0, xColumn) ?? 0) < (numeric($1, xColumn) ?? 0) }
+            .sorted { (numeric($0, x) ?? 0) < (numeric($1, x) ?? 0) }
     }
 
     private func yValue(_ row: [String: String]) -> Double {
