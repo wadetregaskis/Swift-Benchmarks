@@ -252,6 +252,7 @@ struct GenericChartView: View {
     @State private var xColumn = ""
     @State private var seriesColumn = ""
     @State private var normaliseColumn: String? = nil
+    @State private var hoverX: Double? = nil
     @State private var slicerSelections: [String: String] = [:]
     @State private var seriesEnabled: [String: Bool] = [:]
     @State private var seriesColour: [String: Color] = [:]
@@ -319,13 +320,13 @@ struct GenericChartView: View {
                 assignSeriesStyles()
                 refreshSlicers()
             }
-            .onChange(of: xColumn) { _, _ in refreshSlicers() }
+            .onChange(of: xColumn) { _, _ in refreshSlicers(); hoverX = nil }
 
             ScrollView(.horizontal) {
                 HStack {
                     ForEach(slicerColumns, id: \.self) { column in
                         Picker(column, selection: Binding(get: { slicerSelections[column] ?? dataset.distinctValues(column).first ?? "" },
-                                                          set: { slicerSelections[column] = $0 })) {
+                                                          set: { slicerSelections[column] = $0; hoverX = nil })) {
                             ForEach(dataset.distinctValues(column), id: \.self) { value in
                                 Text(displayValue(value, column)).tag(value)
                             }
@@ -340,23 +341,105 @@ struct GenericChartView: View {
     private var chart: some View {
         let rows = filteredRows
 
-        return chartCore(rows)
-            .frame(width: 700, height: 500)
-            .padding()
-            .onDrag {
-                let renderer = ImageRenderer(content: chartCore(rows).frame(width: 700, height: 500).padding())
-                renderer.isOpaque = false
-                renderer.scale = displayScale
-                renderer.colorMode = .extendedLinear
-                return chartDragProvider(title: chartTitle, image: renderer.nsImage)
-            }
+        return HStack(alignment: .top, spacing: 0) {
+            chartCore(rows)
+                .padding()
+                .onDrag {
+                    let renderer = ImageRenderer(content: chartCore(rows, interactive: false).padding())
+                    renderer.isOpaque = false
+                    renderer.scale = displayScale
+                    renderer.colorMode = .extendedLinear
+                    return chartDragProvider(title: chartTitle, image: renderer.nsImage)
+                }
+
+            readoutPanel
+        }
     }
 
-    private func chartCore(_ rows: [[String: String]]) -> some View {
+    /// A live, rank-sorted readout of every (enabled) series' value at the X point nearest the mouse — for telling closely-
+    /// overlapping lines apart.  Populated by hovering the plot; otherwise shows a hint.
+    private var readoutPanel: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let hoverX {
+                Text("at \(xColumn) = \(formatX(hoverX))")
+                    .font(.caption.bold())
+                    .padding(.bottom, 2)
+
+                ForEach(hoverReadout(at: hoverX), id: \.series) { item in
+                    HStack(spacing: 6) {
+                        Text("\(item.rank)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 22, alignment: .trailing)
+
+                        swatch(item.series)
+
+                        Text(item.series)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+
+                        Spacer(minLength: 6)
+
+                        Text(formatMeasure(item.value))
+                            .font(.caption.monospacedDigit())
+
+                        Text(item.ratio > 1.0001 ? "\(item.ratio.formatted(.number.precision(.fractionLength(0...1))))×" : "—")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 50, alignment: .trailing)
+                    }
+                }
+            } else {
+                Text("Hover the chart to rank the series at an X value.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 380, alignment: .topLeading)
+        .padding([.leading, .top])
+    }
+
+    @ViewBuilder
+    private func swatch(_ series: String) -> some View {
+        (seriesSymbol[series] ?? .circle)
+            .foregroundStyle(seriesColour[series] ?? .gray)
+            .frame(width: 9, height: 9)
+    }
+
+    /// Snaps a raw X (from the chart proxy) to the nearest *actual* data point, measuring distance in the same space as the axis.
+    private func snapX(_ raw: Double, among xs: [Double]) -> Double? {
+        guard !xs.isEmpty else { return nil }
+
+        if logX, raw > 0 {
+            return xs.min { abs(log($0) - log(raw)) < abs(log($1) - log(raw)) }
+        }
+
+        return xs.min { abs($0 - raw) < abs($1 - raw) }
+    }
+
+    private func hoverReadout(at x: Double) -> [(rank: Int, series: String, value: Double, ratio: Double)] {
+        var bySeries: [String: Double] = [:]
+
+        for row in filteredRows where numeric(row, xColumn) == x {
+            bySeries[row[seriesColumn] ?? ""] = yValue(row)
+        }
+
+        let sorted = bySeries.sorted { $0.value < $1.value }
+        let best = sorted.first?.value ?? 1
+
+        return sorted.enumerated().map { (rank: $0.offset + 1,
+                                          series: $0.element.key,
+                                          value: $0.element.value,
+                                          ratio: best > 0 ? $0.element.value / best : 1) }
+    }
+
+    private func chartCore(_ rows: [[String: String]], interactive: Bool = true) -> some View {
         let xs = rows.compactMap { numeric($0, xColumn) }
         let ys = rows.map(yValue)
         let useLogX = logX && (xs.min() ?? 0) > 0
         let useLogY = logY && (ys.min() ?? 0) > 0
+        let xValues = Set(xs).sorted()
 
         return Chart {
             ForEach(rows.indices, id: \.self) { index in
@@ -369,7 +452,14 @@ struct GenericChartView: View {
                 .foregroundStyle(by: .value(seriesColumn, series))
                 .symbol(by: .value(seriesColumn, series))
             }
+
+            if interactive, let hoverX {
+                RuleMark(x: .value(xColumn, hoverX))
+                    .foregroundStyle(.secondary.opacity(0.4))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            }
         }
+        .chartPlotStyle { $0.frame(width: 700, height: 500) } // Fix the *plot* size (like the StringReplacement view), not the whole chart — otherwise the trailing legend squishes the plot.
         .chartForegroundStyleScale { seriesColour[$0] ?? .gray }
         .chartSymbolScale { seriesSymbol[$0] ?? BasicChartSymbolShape.circle }
         .chartXScale(domain: .automatic, type: useLogX ? .log : .linear)
@@ -392,6 +482,37 @@ struct GenericChartView: View {
         .chartYAxisLabel(yAxisLabel, position: .trailing, alignment: .center)
         .chartLegend(showLegend ? .visible : .hidden)
         .chartLegend(position: .trailing, alignment: .top, spacing: 16)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                if interactive {
+                    Rectangle()
+                        .fill(.clear)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                guard let plotAnchor = proxy.plotFrame else { return }
+                                let plotRect = geo[plotAnchor]
+                                let xPosition = location.x - plotRect.minX
+
+                                guard xPosition >= 0, xPosition <= plotRect.width,
+                                      let raw = proxy.value(atX: xPosition, as: Double.self),
+                                      let snapped = snapX(raw, among: xValues) else {
+                                    return
+                                }
+
+                                if hoverX != snapped {
+                                    hoverX = snapped
+                                }
+                            case .ended:
+                                if hoverX != nil {
+                                    hoverX = nil
+                                }
+                            }
+                        }
+                }
+            }
+        }
     }
 
     private var filteredRows: [[String: String]] {
