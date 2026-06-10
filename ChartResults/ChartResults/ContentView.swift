@@ -5,6 +5,7 @@
 //  Created by Wade Tregaskis on 6/9/2024.
 //
 
+import AppKit
 import Charts
 import Darwin
 import SwiftUI
@@ -276,16 +277,13 @@ struct GenericChartView: View {
         VStack(spacing: 8) {
             controls
 
-            ScrollView {
-                VStack(alignment: .leading) {
-                    ForEach(dataset.distinctValues(seriesColumn), id: \.self) { value in
-                        Toggle(value, isOn: Binding(get: { seriesEnabled[value] ?? true },
-                                                    set: { seriesEnabled[value] = $0 }))
-                    }
+            VStack(alignment: .leading) {
+                ForEach(dataset.distinctValues(seriesColumn), id: \.self) { value in
+                    Toggle(value, isOn: Binding(get: { seriesEnabled[value] ?? true },
+                                                set: { seriesEnabled[value] = $0 }))
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: 140)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
 
             chart
@@ -353,41 +351,77 @@ struct GenericChartView: View {
                 }
 
             readoutPanel
+
+            Spacer(minLength: 0) // Soaks up leftover width so the readout panel hugs its content and the chart stays put.
         }
     }
 
     /// A live, rank-sorted readout of every (enabled) series' value at the X point nearest the mouse — for telling closely-
     /// overlapping lines apart.  Populated by hovering the plot; otherwise shows a hint.
+    private struct ReadoutRow: Identifiable {
+        let rank: Int
+        let series: String
+        let number: String
+        let unit: String
+        let ratio: String
+
+        var id: String { series }
+    }
+
+    private static let readoutFont = NSFont.preferredFont(forTextStyle: .caption1)
+    private static let readoutDigitFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular)
+
+    private func textWidth(_ string: String, _ font: NSFont) -> CGFloat {
+        (string as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    /// A live, rank-sorted readout of every (enabled) series' value at the X point nearest the mouse — for telling closely-
+    /// overlapping lines apart.  The numeric columns are width-matched (measured up front) so they align vertically: the
+    /// duration's least-significant digit and the ratio's decimal point.  The name is the only flexible column, so the panel
+    /// still hugs its content and only the name truncates when squeezed.
     private var readoutPanel: some View {
         VStack(alignment: .leading, spacing: 3) {
             if let hoverX {
+                let rows = readoutRows(at: hoverX)
+                let nameWidth = (rows.map { textWidth($0.series, Self.readoutFont) }.max() ?? 0) + 4
+                let numberWidth = (rows.map { textWidth($0.number, Self.readoutDigitFont) }.max() ?? 0) + 2
+                let unitWidth = (rows.map { textWidth($0.unit, Self.readoutDigitFont) }.max() ?? 0) + 2
+                let ratioWidth = (rows.map { textWidth($0.ratio, Self.readoutDigitFont) }.max() ?? 0) + 2
+
                 Text("at \(xColumn) = \(formatX(hoverX))")
                     .font(.caption.bold())
                     .padding(.bottom, 2)
 
-                ForEach(hoverReadout(at: hoverX), id: \.series) { item in
-                    HStack(spacing: 6) {
-                        Text("\(item.rank)")
+                ForEach(rows) { row in
+                    HStack(spacing: 8) {
+                        Text("\(row.rank)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 22, alignment: .trailing)
 
-                        swatch(item.series)
+                        swatch(row.series)
 
-                        Text(item.series)
+                        Text(row.series) // The only flexible column: keeps the panel hugging content, and truncates when squeezed.
                             .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                            .frame(idealWidth: nameWidth, maxWidth: nameWidth, alignment: .leading)
 
-                        Spacer(minLength: 6)
+                        HStack(spacing: 3) {
+                            Text(row.number)
+                                .font(.caption.monospacedDigit())
+                                .frame(width: numberWidth, alignment: .trailing)
 
-                        Text(formatMeasure(item.value))
-                            .font(.caption.monospacedDigit())
+                            Text(row.unit)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: unitWidth, alignment: .leading)
+                        }
 
-                        Text(item.ratio > 1.0001 ? "\(item.ratio.formatted(.number.precision(.fractionLength(0...1))))×" : "—")
+                        Text(row.ratio)
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .frame(width: 50, alignment: .trailing)
+                            .frame(width: ratioWidth, alignment: .trailing)
                     }
                 }
             } else {
@@ -396,8 +430,29 @@ struct GenericChartView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: 380, alignment: .topLeading)
         .padding([.leading, .top])
+    }
+
+    private func readoutRows(at x: Double) -> [ReadoutRow] {
+        hoverReadout(at: x).map { item in
+            let parts = measureParts(item.value)
+            let ratio = item.ratio > 1.0001
+                ? "\(item.ratio.formatted(.number.precision(.fractionLength(1))))×"
+                : "—"
+
+            return ReadoutRow(rank: item.rank, series: item.series, number: parts.number, unit: parts.unit, ratio: ratio)
+        }
+    }
+
+    /// Splits the measure into its numeric part and unit so the two sit in separately-aligned columns — the digits align on the
+    /// least-significant digit even when the units differ in width (e.g. µs vs ms).
+    private func measureParts(_ value: Double) -> (number: String, unit: String) {
+        if measureIsDuration && normaliseColumn == nil {
+            let measurement = Measurement(value: value, unit: UnitDuration.nanoseconds).simplified
+            return (measurement.value.formatted(.number.precision(.significantDigits(1...3))), measurement.unit.symbol)
+        }
+
+        return (value.formatted(.number.precision(.significantDigits(1...3))), "")
     }
 
     @ViewBuilder
