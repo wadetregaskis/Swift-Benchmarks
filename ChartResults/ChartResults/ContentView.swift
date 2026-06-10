@@ -461,7 +461,7 @@ struct GenericChartView: View {
         }
         .chartPlotStyle { $0.frame(width: 700, height: 500) } // Fix the *plot* size (like the StringReplacement view), not the whole chart — otherwise the trailing legend squishes the plot.
         .chartForegroundStyleScale { seriesColour[$0] ?? .gray }
-        .chartSymbolScale { seriesSymbol[$0] ?? BasicChartSymbolShape.circle }
+        .chartSymbolScale { (seriesSymbol[$0] ?? BasicChartSymbolShape.circle).strokeBorder(lineWidth: .greatestFiniteMagnitude) } // The bare symbol renders stroked/hollow in the plot but filled in the legend; an effectively-infinite stroke fills it in both, matching the (filled) readout swatches.
         .chartXScale(domain: .automatic, type: useLogX ? .log : .linear)
         .chartYScale(domain: .automatic, type: useLogY ? .log : .linear)
         .chartXAxis {
