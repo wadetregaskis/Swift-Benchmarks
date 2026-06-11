@@ -274,6 +274,7 @@ struct GenericChartView: View {
     @State private var logX = true
     @State private var logY = true
     @State private var didSetup = false
+    @State private var chartSize = CGSize(width: 800, height: 500)
 
     @Environment(\.displayScale) private var displayScale
 
@@ -359,9 +360,13 @@ struct GenericChartView: View {
 
         return HStack(alignment: .top, spacing: 0) {
             chartCore(rows)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(GeometryReader { proxy in
+                    Color.clear.onChange(of: proxy.size, initial: true) { _, size in chartSize = size }
+                })
                 .padding()
                 .onDrag {
-                    let renderer = ImageRenderer(content: chartCore(rows, interactive: false).padding())
+                    let renderer = ImageRenderer(content: chartCore(rows, interactive: false).frame(width: chartSize.width, height: chartSize.height).padding())
                     renderer.isOpaque = false
                     renderer.scale = displayScale
                     renderer.colorMode = .extendedLinear
@@ -530,7 +535,7 @@ struct GenericChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
             }
         }
-        .chartPlotStyle { $0.frame(width: 700, height: 500) } // Fix the *plot* size (like the StringReplacement view), not the whole chart — otherwise the trailing legend squishes the plot.
+        .chartPlotStyle { $0.frame(minWidth: 300, minHeight: 200) } // Grow the plot to fill the available space (with a floor), leaving room for the trailing legend.
         .chartForegroundStyleScale { seriesColour[$0] ?? .gray }
         .chartSymbolScale { (seriesSymbol[$0] ?? BasicChartSymbolShape.circle).strokeBorder(lineWidth: 10) } // A wide-but-FINITE stroke fills the otherwise-hollow plot symbols.  The built-in legend's symbol width scales with this width, so `.greatestFiniteMagnitude` (which the legacy view gets away with because it uses a custom legend) blows the whole layout up to a near-infinite width.
         .chartXScale(domain: .automatic, type: useLogX ? .log : .linear)
