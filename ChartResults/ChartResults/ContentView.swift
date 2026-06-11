@@ -105,30 +105,41 @@ struct ContentView: View {
     @State private var errorMessage: String? = nil
 
     var body: some View {
-        VStack {
-            HStack {
-                Button("Import data…") { showFileImporter = true }
-
-                if let errorMessage {
-                    Text(errorMessage).foregroundStyle(.red)
+        Group {
+            if let genericDataset {
+                // The split view must be the top-level content (not stacked under a toolbar in a VStack), or its panes collapse,
+                // so the import button moves into its sidebar.
+                GenericChartView(dataset: genericDataset, onImport: { showFileImporter = true })
+            } else if let legacyRecords {
+                VStack {
+                    importBar
+                    StringReplacementView(records: legacyRecords)
+                }
+            } else {
+                VStack {
+                    importBar
+                    Spacer()
+                    Text("Import a benchmark results TSV to begin.").foregroundStyle(.secondary)
+                    Spacer()
                 }
             }
-            .padding(.top)
-
-            if let genericDataset {
-                GenericChartView(dataset: genericDataset)
-            } else if let legacyRecords {
-                StringReplacementView(records: legacyRecords)
-            } else {
-                Spacer()
-                Text("Import a benchmark results TSV to begin.").foregroundStyle(.secondary)
-                Spacer()
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.tabSeparatedText, .plainText, .text]) { result in
             guard let url = try? result.get() else { return }
             load(url)
         }
+    }
+
+    private var importBar: some View {
+        HStack {
+            Button("Import data…") { showFileImporter = true }
+
+            if let errorMessage {
+                Text(errorMessage).foregroundStyle(.red)
+            }
+        }
+        .padding(.top)
     }
 
     private func load(_ url: URL) {
@@ -249,6 +260,7 @@ struct GenericDataset {
 /// benchmark, and any future headed dataset.
 struct GenericChartView: View {
     let dataset: GenericDataset
+    var onImport: () -> Void = {}
 
     @State private var xColumn = ""
     @State private var seriesColumn = ""
@@ -274,66 +286,72 @@ struct GenericChartView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            controls
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Button("Import data…", action: onImport)
 
-            VStack(alignment: .leading) {
-                ForEach(dataset.distinctValues(seriesColumn), id: \.self) { value in
-                    Toggle(value, isOn: Binding(get: { seriesEnabled[value] ?? true },
-                                                set: { seriesEnabled[value] = $0 }))
+                    Divider()
+
+                    controls
+
+                    Divider()
+
+                    VStack(alignment: .leading) {
+                        ForEach(dataset.distinctValues(seriesColumn), id: \.self) { value in
+                            Toggle(value, isOn: Binding(get: { seriesEnabled[value] ?? true },
+                                                        set: { seriesEnabled[value] = $0 }))
+                        }
+                    }
                 }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal)
+            .frame(width: 320)
+
+            Divider()
 
             chart
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: setup)
-
-        Spacer(minLength: 0)
     }
 
     private var controls: some View {
-        VStack {
-            HStack {
-                Picker("X axis", selection: $xColumn) {
-                    ForEach(xCandidates, id: \.self) { Text($0).tag($0) }
-                }.fixedSize()
-
-                Picker("Series", selection: $seriesColumn) {
-                    ForEach(categoricalColumns, id: \.self) { Text($0).tag($0) }
-                }.fixedSize()
-
-                Picker("Normalise by", selection: $normaliseColumn) {
-                    Text("None").tag(String?.none)
-                    ForEach(xCandidates, id: \.self) { Text($0).tag(String?.some($0)) }
-                }.fixedSize()
-
-                Toggle("Legend", isOn: $showLegend)
-                Toggle("log X", isOn: $logX)
-                Toggle("log Y", isOn: $logY)
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("X axis", selection: $xColumn) {
+                ForEach(xCandidates, id: \.self) { Text($0).tag($0) }
             }
-            .onChange(of: seriesColumn) { _, _ in
-                seriesEnabled.removeAll()
-                assignSeriesStyles()
-                refreshSlicers()
-            }
-            .onChange(of: xColumn) { _, _ in refreshSlicers(); hoverX = nil }
 
-            ScrollView(.horizontal) {
-                HStack {
-                    ForEach(slicerColumns, id: \.self) { column in
-                        Picker(column, selection: Binding(get: { slicerSelections[column] ?? dataset.distinctValues(column).first ?? "" },
-                                                          set: { slicerSelections[column] = $0; hoverX = nil })) {
-                            ForEach(dataset.distinctValues(column), id: \.self) { value in
-                                Text(displayValue(value, column)).tag(value)
-                            }
-                        }.fixedSize()
+            Picker("Series", selection: $seriesColumn) {
+                ForEach(categoricalColumns, id: \.self) { Text($0).tag($0) }
+            }
+
+            Picker("Normalise by", selection: $normaliseColumn) {
+                Text("None").tag(String?.none)
+                ForEach(xCandidates, id: \.self) { Text($0).tag(String?.some($0)) }
+            }
+
+            Toggle("Legend", isOn: $showLegend)
+            Toggle("log X", isOn: $logX)
+            Toggle("log Y", isOn: $logY)
+
+            ForEach(slicerColumns, id: \.self) { column in
+                Picker(column, selection: Binding(get: { slicerSelections[column] ?? dataset.distinctValues(column).first ?? "" },
+                                                  set: { slicerSelections[column] = $0; hoverX = nil })) {
+                    ForEach(dataset.distinctValues(column), id: \.self) { value in
+                        Text(displayValue(value, column)).tag(value)
                     }
                 }
             }
         }
-        .padding(.horizontal)
+        .onChange(of: seriesColumn) { _, _ in
+            seriesEnabled.removeAll()
+            assignSeriesStyles()
+            refreshSlicers()
+        }
+        .onChange(of: xColumn) { _, _ in refreshSlicers(); hoverX = nil }
     }
 
     private var chart: some View {
@@ -351,8 +369,6 @@ struct GenericChartView: View {
                 }
 
             readoutPanel
-
-            Spacer(minLength: 0) // Soaks up leftover width so the readout panel hugs its content and the chart stays put.
         }
     }
 
@@ -516,7 +532,7 @@ struct GenericChartView: View {
         }
         .chartPlotStyle { $0.frame(width: 700, height: 500) } // Fix the *plot* size (like the StringReplacement view), not the whole chart — otherwise the trailing legend squishes the plot.
         .chartForegroundStyleScale { seriesColour[$0] ?? .gray }
-        .chartSymbolScale { (seriesSymbol[$0] ?? BasicChartSymbolShape.circle).strokeBorder(lineWidth: .greatestFiniteMagnitude) } // The bare symbol renders stroked/hollow in the plot but filled in the legend; an effectively-infinite stroke fills it in both, matching the (filled) readout swatches.
+        .chartSymbolScale { (seriesSymbol[$0] ?? BasicChartSymbolShape.circle).strokeBorder(lineWidth: 10) } // A wide-but-FINITE stroke fills the otherwise-hollow plot symbols.  The built-in legend's symbol width scales with this width, so `.greatestFiniteMagnitude` (which the legacy view gets away with because it uses a custom legend) blows the whole layout up to a near-infinite width.
         .chartXScale(domain: .automatic, type: useLogX ? .log : .linear)
         .chartYScale(domain: .automatic, type: useLogY ? .log : .linear)
         .chartXAxis {
