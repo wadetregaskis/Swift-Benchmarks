@@ -266,6 +266,7 @@ struct GenericChartView: View {
     @State private var seriesColumn = ""
     @State private var normaliseColumn: String? = nil
     @State private var hoverX: Double? = nil
+    @State private var pinnedX: Double? = nil
     @State private var slicerSelections: [String: String] = [:]
     @State private var seriesEnabled: [String: Bool] = [:]
     @State private var seriesColour: [String: Color] = [:]
@@ -281,6 +282,9 @@ struct GenericChartView: View {
     private var xCandidates: [String] { dataset.columns.filter { dataset.numericColumns.contains($0) && $0 != dataset.measureColumn } }
     private var categoricalColumns: [String] { dataset.columns.filter { !dataset.numericColumns.contains($0) } }
     private var slicerColumns: [String] { dataset.columns.filter { $0 != xColumn && $0 != seriesColumn && $0 != dataset.measureColumn } }
+
+    /// The X the readout reflects: a pinned (clicked) point takes precedence over the hovered one.
+    private var activeX: Double? { pinnedX ?? hoverX }
 
     private func numeric(_ row: [String: String], _ column: String) -> Double? {
         row[column].flatMap(Double.init)
@@ -340,7 +344,7 @@ struct GenericChartView: View {
 
             ForEach(slicerColumns, id: \.self) { column in
                 Picker(column, selection: Binding(get: { slicerSelections[column] ?? dataset.distinctValues(column).first ?? "" },
-                                                  set: { slicerSelections[column] = $0; hoverX = nil })) {
+                                                  set: { slicerSelections[column] = $0; hoverX = nil; pinnedX = nil })) {
                     ForEach(dataset.distinctValues(column), id: \.self) { value in
                         Text(displayValue(value, column)).tag(value)
                     }
@@ -352,7 +356,7 @@ struct GenericChartView: View {
             assignSeriesStyles()
             refreshSlicers()
         }
-        .onChange(of: xColumn) { _, _ in refreshSlicers(); hoverX = nil }
+        .onChange(of: xColumn) { _, _ in refreshSlicers(); hoverX = nil; pinnedX = nil }
     }
 
     private var chart: some View {
@@ -402,14 +406,14 @@ struct GenericChartView: View {
     /// still hugs its content and only the name truncates when squeezed.
     private var readoutPanel: some View {
         VStack(alignment: .leading, spacing: 3) {
-            if let hoverX {
-                let rows = readoutRows(at: hoverX)
+            if let activeX {
+                let rows = readoutRows(at: activeX)
                 let nameWidth = (rows.map { textWidth($0.series, Self.readoutFont) }.max() ?? 0) + 4
                 let numberWidth = (rows.map { textWidth($0.number, Self.readoutDigitFont) }.max() ?? 0) + 2
                 let unitWidth = (rows.map { textWidth($0.unit, Self.readoutDigitFont) }.max() ?? 0) + 2
                 let ratioWidth = (rows.map { textWidth($0.ratio, Self.readoutDigitFont) }.max() ?? 0) + 2
 
-                Text("at \(xColumn) = \(formatX(hoverX))")
+                Text("at \(xColumn) = \(formatX(activeX))\(pinnedX != nil ? " (pinned)" : "")")
                     .font(.caption.bold())
                     .padding(.bottom, 2)
 
@@ -445,10 +449,6 @@ struct GenericChartView: View {
                             .frame(width: ratioWidth, alignment: .trailing)
                     }
                 }
-            } else {
-                Text("Hover the chart to rank the series at an X value.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding([.leading, .top])
@@ -494,6 +494,21 @@ struct GenericChartView: View {
         return xs.min { abs($0 - raw) < abs($1 - raw) }
     }
 
+    /// Maps a point in the chart overlay to the nearest data X, or nil if it's outside the plot area.
+    private func snappedX(at location: CGPoint, proxy: ChartProxy, geo: GeometryProxy, among xs: [Double]) -> Double? {
+        guard let plotAnchor = proxy.plotFrame else { return nil }
+
+        let plotRect = geo[plotAnchor]
+        let xPosition = location.x - plotRect.minX
+
+        guard xPosition >= 0, xPosition <= plotRect.width,
+              let raw = proxy.value(atX: xPosition, as: Double.self) else {
+            return nil
+        }
+
+        return snapX(raw, among: xs)
+    }
+
     private func hoverReadout(at x: Double) -> [(rank: Int, series: String, value: Double, ratio: Double)] {
         var bySeries: [String: Double] = [:]
 
@@ -529,10 +544,10 @@ struct GenericChartView: View {
                 .symbol(by: .value(seriesColumn, series))
             }
 
-            if interactive, let hoverX {
-                RuleMark(x: .value(xColumn, hoverX))
-                    .foregroundStyle(.secondary.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            if interactive, let activeX {
+                RuleMark(x: .value(xColumn, activeX))
+                    .foregroundStyle(.secondary.opacity(pinnedX != nil ? 0.7 : 0.4))
+                    .lineStyle(pinnedX != nil ? StrokeStyle(lineWidth: 1.5) : StrokeStyle(lineWidth: 1, dash: [4, 3])) // Solid when pinned, dashed when just hovering.
             }
         }
         .chartPlotStyle { $0.frame(minWidth: 300, minHeight: 200) } // Grow the plot to fill the available space (with a floor), leaving room for the trailing legend.
@@ -565,25 +580,24 @@ struct GenericChartView: View {
                         .fill(.clear)
                         .contentShape(Rectangle())
                         .onContinuousHover { phase in
+                            guard pinnedX == nil else { return } // While a point is pinned, ignore the mouse.
                             switch phase {
                             case .active(let location):
-                                guard let plotAnchor = proxy.plotFrame else { return }
-                                let plotRect = geo[plotAnchor]
-                                let xPosition = location.x - plotRect.minX
-
-                                guard xPosition >= 0, xPosition <= plotRect.width,
-                                      let raw = proxy.value(atX: xPosition, as: Double.self),
-                                      let snapped = snapX(raw, among: xValues) else {
-                                    return
-                                }
-
-                                if hoverX != snapped {
+                                if let snapped = snappedX(at: location, proxy: proxy, geo: geo, among: xValues), hoverX != snapped {
                                     hoverX = snapped
                                 }
                             case .ended:
-                                if hoverX != nil {
-                                    hoverX = nil
-                                }
+                                if hoverX != nil { hoverX = nil }
+                            }
+                        }
+                        .onTapGesture(coordinateSpace: .local) { location in
+                            guard let snapped = snappedX(at: location, proxy: proxy, geo: geo, among: xValues) else { return }
+
+                            if pinnedX == snapped {
+                                pinnedX = nil       // Clicking the pinned rule again dismisses it and resumes hover-tracking.
+                                hoverX = snapped
+                            } else {
+                                pinnedX = snapped
                             }
                         }
                 }
